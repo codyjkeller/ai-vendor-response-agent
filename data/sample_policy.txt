@@ -1,0 +1,1 @@
+Our organization enforces Multi-Factor Authentication (MFA) on all employee accounts. Data is encrypted at rest using AES-256. We perform penetration testing annually.
