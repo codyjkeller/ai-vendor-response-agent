@@ -1,0 +1,24 @@
+# Security & Secrets (NEVER commit these)
+.env
+.DS_Store
+
+# Python Boilerplate
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+
+# Project Specific Data (Don't leak SOC2 reports!)
+data/*
+!data/.gitkeep
+chroma_db/
+
+# Outputs
+vendor_response_export.csv
+
+# IDEs
+.vscode/
+.idea/
