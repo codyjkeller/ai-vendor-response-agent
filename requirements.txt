@@ -5,3 +5,4 @@ chromadb
 pypdf
 python-dotenv
 tiktoken
+pandas
