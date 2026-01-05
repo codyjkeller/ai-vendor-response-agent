@@ -11,18 +11,21 @@ from rich.console import Console
 load_dotenv()
 console = Console()
 DB_DIR = "./chroma_db"
-INPUT_FILE = "questionnaire_input.csv"  # The file you get from a vendor
+INPUT_FILE = "questionnaire_input.csv"
 OUTPUT_FILE = "vendor_response_complete.csv"
 
-# The prompt engineering that prevents hallucinations
+# 🛡️ THE GUARDRAILS PROMPT
+# This is the "Brain" of the agent. We strictly limit it to context and length.
 RAG_PROMPT = """
-You are a Senior Security Engineer answering a vendor security questionnaire.
-Use ONLY the provided context to answer the question. 
+You are a strict Compliance Officer answering a security questionnaire. 
+Your goal is to provide a binary answer (Yes/No) followed by a short justification based ONLY on the context.
 
-Rules:
-1. If the answer is in the context, cite the specific document name.
-2. If the context does NOT contain the answer, say "Review Required - Not found in Knowledge Base".
-3. Keep answers professional, concise, and audit-ready.
+ STRICT RULES:
+1. Answer in 1-2 sentences MAX. Be extremely concise.
+2. Start with "Yes," "No," or "Partially" if applicable.
+3. If the answer is NOT explicitly in the context below, output EXACTLY: "Review Required - Not found in Knowledge Base".
+4. Do NOT make up information. Do NOT use outside knowledge.
+5. If the context mentions a specific policy name (e.g., "Access Control Policy"), cite it.
 
 Context:
 {context}
@@ -46,12 +49,16 @@ class VendorResponder:
             persist_directory=DB_DIR,
             embedding_function=OpenAIEmbeddings(model="text-embedding-3-small")
         )
+        
+        # Temperature=0 is CRITICAL for reducing hallucinations
         self.llm = ChatOpenAI(model_name="gpt-4-turbo", temperature=0)
+        
+        # k=4 means "Find the 4 most relevant paragraphs"
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": 4})
 
     def format_docs(self, docs):
         """Helper to format retrieved docs for the prompt"""
-        return "\n\n".join(f"[Source: {d.metadata.get('source_file', 'Unknown')}, Page: {d.metadata.get('page', '0')}]\n{d.page_content}" for d in docs)
+        return "\n\n".join(f"[Source: {d.metadata.get('source_file', 'Unknown')}]\n{d.page_content}" for d in docs)
 
     def generate_answer(self, question):
         """Retrieves context and generates an answer"""
@@ -73,7 +80,8 @@ class VendorResponder:
         
         try:
             response = chain.invoke(question)
-            return response.content, source_str
+            content = response.content.strip()
+            return content, source_str
         except Exception as e:
             return f"Error: {e}", "N/A"
 
@@ -86,7 +94,12 @@ class VendorResponder:
         self.console.rule("[bold blue]📝 Vendor Questionnaire Agent[/bold blue]")
         
         # Load CSV
-        df = pd.read_csv(INPUT_FILE)
+        try:
+            df = pd.read_csv(INPUT_FILE)
+        except Exception as e:
+            self.console.print(f"[red]❌ Error reading CSV: {e}[/red]")
+            return
+
         if 'Question' not in df.columns:
             self.console.print("[red]❌ CSV must have a column named 'Question'[/red]")
             return
@@ -104,9 +117,9 @@ class VendorResponder:
                 answers.append(ans)
                 sources_list.append(src)
                 
-                # Simple confidence logic
+                # Confidence Logic: If the Agent says "Review Required", mark it RED
                 if "Review Required" in ans:
-                    status_list.append("🔴 Low Confidence")
+                    status_list.append("🔴 Manual Review")
                 else:
                     status_list.append("🟢 Auto-Filled")
 
