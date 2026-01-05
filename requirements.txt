@@ -3,6 +3,8 @@ langchain-community
 langchain-openai
 chromadb
 pypdf
+pandas
+openpyxl
 python-dotenv
 tiktoken
-pandas
+rich
