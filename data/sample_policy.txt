@@ -1,1 +1,19 @@
-Our organization enforces Multi-Factor Authentication (MFA) on all employee accounts. Data is encrypted at rest using AES-256. We perform penetration testing annually.
+CONFIDENTIAL INFORMATION SECURITY POLICY
+Company: Rillet-Demo-Corp
+Last Updated: Jan 2025
+
+1. ACCESS CONTROL
+Multi-Factor Authentication (MFA) is required for all employees to access critical systems (AWS, GitHub, Google Workspace).
+Password Policy: Passwords must be at least 12 characters long, containing mixed case, numbers, and symbols. Rotation is required every 90 days.
+
+2. ENCRYPTION
+Data at Rest: All production databases are encrypted using AES-256 via AWS KMS.
+Data in Transit: All network traffic is encrypted using TLS 1.2 or higher.
+
+3. INCIDENT RESPONSE
+We maintain a formal Incident Response Plan (IRP) that is tested annually.
+The Security Team is available 24/7/365. All SEV-1 incidents must be reported to the CTO within 1 hour.
+
+4. VULNERABILITY MANAGEMENT
+Third-party penetration tests are performed annually by an independent firm.
+Internal vulnerability scans run weekly using automated tools. Critical patches must be applied within 48 hours.
