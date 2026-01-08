@@ -10,160 +10,136 @@ from ingest import create_vector_db
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="VendorAI - Compliance Portal",
+    page_title="VendorAI Platform",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- THEME ENGINE (Dark/Light Mode) ---
+# --- THEME ENGINE ---
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
-# --- CUSTOM CSS (The "Polish" Layer) ---
+# --- CUSTOM CSS (A-SCEND REPLICA) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
     
-    /* Navbar / Header Style */
-    .header-container {
-        background-color: #00C853;
-        padding: 1.5rem;
-        border-radius: 0px 0px 10px 10px;
-        margin-bottom: 2rem;
+    /* DARK SIDEBAR (A-SCEND Style) */
+    section[data-testid="stSidebar"] {
+        background-color: #111827; /* Dark Navy/Black */
         color: white;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] p, 
+    section[data-testid="stSidebar"] span {
+        color: #E5E7EB !important; /* Light Grey Text */
     }
     
-    /* Metric Cards with Colored Borders */
+    /* Metrics Cards */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
-        border-left: 5px solid #00C853; /* Green accent on left */
-        padding: 15px;
-        border-radius: 5px;
-        box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
-    }
-
-    /* Footer Style */
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: #F0F2F6;
-        color: #666;
-        text-align: center;
-        padding: 10px;
-        font-size: 12px;
-        border-top: 1px solid #ddd;
-        z-index: 100;
+        border: 1px solid #e0e0e0;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0px 1px 3px rgba(0,0,0,0.05);
     }
     
-    /* Dark Mode Overrides */
-    .dark-mode-metric {
-        background-color: #2D2D2D !important;
-        color: white !important;
-        border-left: 5px solid #00C853;
+    /* Custom Header Style */
+    .main-header {
+        font-size: 24px;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 20px;
+    }
+    
+    /* Green Progress Bars */
+    .stProgress > div > div > div > div {
+        background-color: #2e7d32;
     }
 
 </style>
 """, unsafe_allow_html=True)
 
-# --- UI COMPONENTS ---
-
-def make_footer():
-    st.markdown("""
-    <div class="footer">
-        <p>VendorAI v1.0 | Authorized Use Only | © 2026 Security Operations</p>
-    </div>
-    """, unsafe_allow_html=True)
-
 # --- Sidebar ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/9663/9663853.png", width=50) # Placeholder Logo
-    st.title("VendorAI")
+    st.title("🛡️ A-SCEND AI")
+    st.caption("Compliance Automation")
     
-    # Navigation
-    page = st.radio("Navigation", ["Dashboard", "Questionnaire Assistant", "Settings"])
-    st.divider()
+    st.markdown("---")
     
-    # Theme Toggle
-    st.write("### 🎨 Appearance")
-    is_dark = st.toggle("Dark Mode", value=False)
+    # Expanded Menu Options
+    page = st.radio(
+        "Main Menu", 
+        ["Dashboard", "Engagements", "Assignments", "Questionnaire Agent", "Settings"],
+        index=0
+    )
     
-    # Dynamic CSS based on Toggle
-    if is_dark:
-        st.markdown("""
-        <style>
-            .stApp { background-color: #1E1E1E; color: white; }
-            section[data-testid="stSidebar"] { background-color: #2D2D2D; }
-            div[data-testid="stMetric"] { background-color: #2D2D2D !important; border: 1px solid #444; border-left: 5px solid #00C853; }
-            h1, h2, h3, h4, p, span { color: white !important; }
-            .header-container { background-color: #1b5e20; } /* Darker green header */
-            .footer { background-color: #2D2D2D; color: #aaa; border-top: 1px solid #444; }
-        </style>
-        """, unsafe_allow_html=True)
-
+    st.markdown("---")
+    
+    # Client Selector (Mockup)
+    st.selectbox("Current Client", ["SoundThinking", "Internal Security", "Vendor A"])
+    
     st.divider()
     
     # System Status
     api_key = os.getenv("OPENAI_API_KEY")
-    st.caption("SYSTEM STATUS")
-    if api_key:
-        st.markdown("🟢 **AI Engine:** Online")
-    else:
-        st.markdown("🟡 **AI Engine:** Offline")
-    
-    db_status = "Active" if os.path.exists("./chroma_db") else "Building..."
-    st.markdown(f"📚 **Knowledge Base:** {db_status}")
+    status_color = "🟢" if api_key else "🟡"
+    st.caption(f"{status_color} System Status: Online")
 
 # --- Initialize Logic ---
 if not os.path.exists("./chroma_db") and os.path.exists("./data"):
-    with st.spinner("🤖 Initializing Knowledge Base..."):
-        try:
-            create_vector_db()
-        except:
-            pass
+    try:
+        create_vector_db()
+    except:
+        pass
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "agent" not in st.session_state:
     st.session_state.agent = VendorResponseAgent()
 
-# --- PAGE 1: DASHBOARD ---
+# --- PAGE 1: DASHBOARD (Matching Your Screenshot) ---
 if page == "Dashboard":
-    # Custom Header Banner
-    st.markdown('<div class="header-container"><h1>Compliance Dashboard</h1><p>Real-time oversight of SOC 2 Type II Engagement</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Engagement Overview: SOC 2 Type II</div>', unsafe_allow_html=True)
     
-    # Metrics with accent borders
+    # The A-SCEND "4 Box" Layout
     col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        st.metric("Completion Status", "50%", "On Track")
+        st.metric("Action Required", "0", delta=None) # Red icon implied by context usually, but keeping simple
     with col2:
-        st.metric("Pending Questions", "190", "-5 Today")
+        st.metric("Past Due", "0", delta=None)
     with col3:
-        st.metric("Action Required", "0", delta_color="off")
+        st.metric("New Comments", "0", delta=None)
     with col4:
-        st.metric("Avg Response Time", "1.2s", "AI Assisted")
+        st.metric("Requests Accepted", "100%", "Completed")
 
-    st.markdown("#### Engagement Progress")
-    st.progress(50)
-    st.caption("📅 Deadline: Feb 28, 2026 | Milestone: Evidence Collection Phase")
+    st.markdown("### Engagement Milestones")
+    # Timeline Visual
+    st.progress(100)
+    col_a, col_b, col_c = st.columns([1,1,1])
+    with col_a:
+        st.caption("✅ Kickoff (Aug 29)")
+    with col_b:
+        st.caption("✅ Evidence Collection (Oct 16)")
+    with col_c:
+        st.caption("✅ Fieldwork (Nov 12)")
 
     st.divider()
     
-    # Table Section
-    st.subheader("📋 Recent Requests")
-    
+    # Recent Activity Table
+    st.subheader("Recent Requests")
     data = {
         "Request ID": ["P-1", "P-101", "P-13", "P-135", "P-14"],
         "Description": ["Application Code Changes", "Backup Failures List", "Network Security Rules", "Security Control Failures", "Incident Reports"],
-        "Status": ["Accepted", "Accepted", "Review Pending", "In Progress", "Action Required"],
+        "Status": ["Accepted", "Accepted", "Review Pending", "In Progress", "Accepted"],
         "Owner": ["Cody Keller", "Cody Keller", "AI Agent", "AI Agent", "Admin"]
     }
     df = pd.DataFrame(data)
@@ -182,9 +158,36 @@ if page == "Dashboard":
         }
     )
 
-# --- PAGE 2: ASSISTANT ---
-elif page == "Questionnaire Assistant":
-    st.markdown('<div class="header-container"><h1>⚡ Rapid Response Agent</h1><p>Upload questionnaires or ask security questions directly.</p></div>', unsafe_allow_html=True)
+# --- PAGE 2: ENGAGEMENTS (Mockup) ---
+elif page == "Engagements":
+    st.markdown('<div class="main-header">Active Engagements</div>', unsafe_allow_html=True)
+    st.info("Select an engagement to view details.")
+    
+    # Mock Engagement List
+    eng_data = pd.DataFrame({
+        "Engagement": ["SOUNDTHINKING_2025_Type 2 SOC 2", "INTERNAL_ISO_27001", "HIPAA_2025"],
+        "Progress": [100, 45, 10],
+        "Status": ["Report Creation", "In Progress", "Scoping"]
+    })
+    
+    st.dataframe(
+        eng_data, 
+        use_container_width=True,
+        column_config={
+            "Progress": st.column_config.ProgressColumn(
+                "Progress",
+                format="%d%%",
+                min_value=0,
+                max_value=100,
+            ),
+            "Status": st.column_config.TextColumn("Status")
+        },
+        hide_index=True
+    )
+
+# --- PAGE 3: ASSISTANT ---
+elif page == "Questionnaire Agent":
+    st.markdown('<div class="main-header">⚡ Rapid Response Agent</div>', unsafe_allow_html=True)
 
     # Chat Interface
     for message in st.session_state.messages:
@@ -222,9 +225,11 @@ elif page == "Questionnaire Assistant":
                 except Exception as e:
                     st.error(f"Error: {e}")
 
+# --- OTHER PAGES ---
+elif page == "Assignments":
+    st.title("Assignments")
+    st.write("List of pending user tasks goes here.")
+
 elif page == "Settings":
     st.title("Settings")
-    st.info("User Management and Knowledge Base Uploads coming soon.")
-
-# Inject Footer
-make_footer()
+    st.write("User management and integration settings.")
