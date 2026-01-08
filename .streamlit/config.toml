@@ -1,0 +1,9 @@
+[theme]
+primaryColor = "#00C853"   # That vibrant "Success" green from your screenshot
+backgroundColor = "#FFFFFF" # Clean white background
+secondaryBackgroundColor = "#F0F2F6" # Light grey for sidebar/cards
+textColor = "#262730"       # Sharp dark grey text
+font = "sans serif"         # Base font setting
+
+[server]
+enableCORS = false
