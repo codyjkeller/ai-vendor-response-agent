@@ -1,24 +1,18 @@
-# Security & Secrets (NEVER commit these)
+# Python / Environment
+__pycache__/
+*.py[cod]
 .env
+venv/
 .DS_Store
 
-# Python Boilerplate
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-venv/
-.venv/
-env/
-
-# Project Specific Data (Don't leak SOC2 reports!)
-data/*
-!data/.gitkeep
+# Vector Database (Local Storage)
 chroma_db/
+db/
+vector_store/
 
-# Outputs
-vendor_response_export.csv
+# Generated Reports
+*.csv
+*.xlsx
 
-# IDEs
-.vscode/
-.idea/
+# Logs
+*.log
