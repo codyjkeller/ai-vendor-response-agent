@@ -8,7 +8,7 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 from rich.console import Console
-from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # Setup
 load_dotenv()
@@ -16,18 +16,28 @@ console = Console()
 
 DB_DIR = "./chroma_db"
 API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL_NAME = os.getenv("LLM_MODEL", "gpt-4")
+
+PROMPT_TEMPLATE = """
+You are a Security Compliance Officer. Answer the questionnaire based STRICTLY on the context.
+If the context is missing, state "Review Required".
+
+Context: {context}
+Question: {question}
+
+Answer:
+"""
 
 class VendorResponseAgent:
     def __init__(self):
-        # 1. Load Embeddings (Local if no key, OpenAI if key exists)
         if not API_KEY:
-            console.print("[bold yellow]⚠️  No API Key found. Running in SEARCH-ONLY mode (HuggingFace).[/bold yellow]")
+            console.print("[bold yellow]⚠️  No API Key found. Running in SEARCH-ONLY mode.[/bold yellow]")
             self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
             self.llm = None
         else:
-            console.print("[bold green]✅ API Key found. Running in FULL AI mode.[/bold green]")
+            console.print(f"[bold green]✅ API Key found. Using {MODEL_NAME}.[/bold green]")
             self.embeddings = OpenAIEmbeddings()
-            self.llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+            self.llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0)
 
         if os.path.exists(DB_DIR):
             self.vector_db = Chroma(persist_directory=DB_DIR, embedding_function=self.embeddings)
@@ -35,42 +45,61 @@ class VendorResponseAgent:
             console.print("[red]❌ DB not found. Run 'python src/ingest.py'[/red]")
             self.vector_db = None
 
-    def search_knowledge_base(self, question):
-        """Retrieves documents without generating an answer (Free Mode)."""
-        if not self.vector_db: return "DB Error"
+    def generate_responses(self, questions):
+        """Generates AI responses (if key exists) or Search results (if no key)."""
+        if not self.vector_db: return None
         
-        console.print(f"\n[cyan]🔍 Searching for:[/cyan] {question}")
-        docs = self.vector_db.similarity_search(question, k=3)
-        
-        if not docs:
-            return "No relevant documents found."
-            
-        # Format the "found" text
         results = []
-        for i, doc in enumerate(docs):
-            source = doc.metadata.get('source', 'Unknown')
-            content = doc.page_content.replace('\n', ' ')[:200] + "..."
-            results.append(f"[bold]Source:[/bold] {source}\n[dim]{content}[/dim]")
         
-        return "\n\n".join(results)
+        # Setup Retrieval Chain (if LLM exists)
+        qa_chain = None
+        if self.llm:
+            qa_prompt = PromptTemplate(template=PROMPT_TEMPLATE, input_variables=["context", "question"])
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=self.llm,
+                chain_type="stuff",
+                retriever=self.vector_db.as_retriever(search_kwargs={"k": 3}),
+                return_source_documents=True,
+                chain_type_kwargs={"prompt": qa_prompt}
+            )
 
-    def generate_response(self, question):
-        """Full AI Answer (Paid Mode)."""
-        if not self.llm:
-            return self.search_knowledge_base(question)
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+            task = progress.add_task(f"[cyan]Processing {len(questions)} items...", total=len(questions))
             
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=self.vector_db.as_retriever(search_kwargs={"k": 3}),
-            return_source_documents=True
-        )
-        response = qa_chain.invoke({"query": question})
-        return response['result']
+            for q in questions:
+                try:
+                    if self.llm:
+                        # Full AI Mode
+                        response = qa_chain.invoke({"query": q})
+                        answer = response['result']
+                        docs = response['source_documents']
+                        status = "⚠️ Review" if "Review Required" in answer else "✅ Auto-Filled"
+                    else:
+                        # Search Only Mode
+                        docs = self.vector_db.similarity_search(q, k=3)
+                        answer = "API Key Required for AI Answer. See Evidence."
+                        status = "🔍 Search Result"
+
+                    # Evidence Logic
+                    evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs]) if docs else "No Source"
+
+                    results.append({
+                        "Question": q,
+                        "AI_Response": answer,
+                        "Status": status,
+                        "Evidence": evidence
+                    })
+                except Exception as e:
+                    results.append({"Question": q, "AI_Response": f"Error: {e}", "Status": "❌ Failed"})
+                
+                progress.advance(task)
+
+        return pd.DataFrame(results)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--file", help="CSV with 'Question' column")
     args = parser.parse_args()
 
     agent = VendorResponseAgent()
@@ -80,10 +109,14 @@ if __name__ == "__main__":
         while True:
             q = input("\nQuestion: ")
             if q.lower() in ["exit", "quit"]: break
-            
-            if API_KEY:
-                print(agent.generate_response(q))
-            else:
-                # Search Only Output
-                result = agent.search_knowledge_base(q)
-                console.print(result)
+            df = agent.generate_responses([q])
+            console.print(f"\n[bold]Answer:[/bold] {df.iloc[0]['AI_Response']}")
+            console.print(f"[dim]Evidence: {df.iloc[0]['Evidence']}[/dim]")
+    
+    elif args.file:
+        if os.path.exists(args.file):
+            df = pd.read_csv(args.file)
+            if "Question" in df.columns:
+                results_df = agent.generate_responses(df["Question"].tolist())
+                results_df.to_csv("completed_responses.csv", index=False)
+                console.print("\n[bold green]✅ Saved to completed_responses.csv[/bold green]")
