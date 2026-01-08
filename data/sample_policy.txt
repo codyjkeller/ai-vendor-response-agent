@@ -1,19 +1,38 @@
 CONFIDENTIAL INFORMATION SECURITY POLICY
 Company: Rillet-Demo-Corp
-Last Updated: Jan 2025
+Version: 2025.1
+Last Updated: January 2, 2025
 
-1. ACCESS CONTROL
-Multi-Factor Authentication (MFA) is required for all employees to access critical systems (AWS, GitHub, Google Workspace).
-Password Policy: Passwords must be at least 12 characters long, containing mixed case, numbers, and symbols. Rotation is required every 90 days.
+SECTION 1: ACCESS CONTROL & AUTHENTICATION
+1.1 User Access
+Access to production systems is restricted to the Engineering team. We utilize Role-Based Access Control (RBAC). 
+1.2 Authentication
+Multi-Factor Authentication (MFA) is enforced for ALL employees via Okta. 
+Password Policy: Minimum 14 characters, mixed case, alphanumeric. Passwords rotate every 90 days.
+1.3 Workstation Security
+All company laptops must have full-disk encryption (FileVault/BitLocker) enabled. Screen lock is set to activate after 5 minutes of inactivity.
 
-2. ENCRYPTION
-Data at Rest: All production databases are encrypted using AES-256 via AWS KMS.
-Data in Transit: All network traffic is encrypted using TLS 1.2 or higher.
+SECTION 2: DATA PROTECTION
+2.1 Encryption
+Data at Rest: Encrypted using AES-256 (AWS KMS). Keys are rotated annually.
+Data in Transit: Encrypted using TLS 1.3. We do not support weak ciphers (e.g., SSLv3).
+2.2 Data Classification
+Data is classified as Public, Internal, or Confidential. Customer PII is always treated as Confidential.
 
-3. INCIDENT RESPONSE
-We maintain a formal Incident Response Plan (IRP) that is tested annually.
-The Security Team is available 24/7/365. All SEV-1 incidents must be reported to the CTO within 1 hour.
+SECTION 3: VULNERABILITY MANAGEMENT
+3.1 Penetration Testing
+Independent third-party penetration tests are conducted annually. The last test was completed on Oct 15, 2024, by Bishop Fox.
+3.2 Vulnerability Scanning
+Automated scans run weekly on all production containers. Critical vulnerabilities (CVSS > 9.0) must be remediated within 48 hours. High vulnerabilities (CVSS > 7.0) within 14 days.
 
-4. VULNERABILITY MANAGEMENT
-Third-party penetration tests are performed annually by an independent firm.
-Internal vulnerability scans run weekly using automated tools. Critical patches must be applied within 48 hours.
+SECTION 4: HUMAN RESOURCES SECURITY
+4.1 Background Checks
+All employees and contractors undergo background checks (criminal, education, employment) prior to joining.
+4.2 Security Training
+Security Awareness Training is mandatory upon hire and annually thereafter. We conduct monthly phishing simulations.
+
+SECTION 5: INCIDENT RESPONSE & BUSINESS CONTINUITY
+5.1 Incident Response
+We maintain a 24/7 Incident Response Team. The target response time for SEV-1 incidents is 15 minutes.
+5.2 Backups
+Database backups are performed daily and replicated to a secondary region (us-east-2) for disaster recovery. Backups are retained for 30 days and tested quarterly.
