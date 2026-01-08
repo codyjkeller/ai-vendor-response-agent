@@ -1,0 +1,2 @@
+https://openai.com/security
+https://cloud.google.com/security/compliance/soc-2
