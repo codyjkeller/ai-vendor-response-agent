@@ -5,14 +5,13 @@ __pycache__/
 venv/
 .DS_Store
 
-# Vector Database (Local Storage)
+# Vector Database (Local Storage - Rebuilt on Cloud)
 chroma_db/
 db/
 vector_store/
 
-# Generated Reports
-*.csv
-*.xlsx
+# Generated Output Files (Ignore results, but allow input data)
+completed_responses.csv
 
 # Logs
 *.log
