@@ -1,0 +1,24 @@
+import pandas as pd
+import os
+
+# Create data directory if not exists
+os.makedirs("data", exist_ok=True)
+
+data = {
+    "Question": [
+        "What is your RTO (Recovery Time Objective)?",
+        "Do you use background checks?",
+        "Is data encrypted at rest?"
+    ],
+    "Answer": [
+        "Our RTO is 4 hours for critical systems and 24 hours for non-critical systems.",
+        "Yes, we use Checkr for all US-based employees and contractors.",
+        "Yes, all databases are encrypted via AWS KMS using AES-256 keys."
+    ],
+    "Date_Answered": ["2024-10-01", "2024-11-15", "2024-12-01"]
+}
+
+df = pd.DataFrame(data)
+df.to_excel("data/past_assessments.xlsx", index=False)
+
+print("✅ Created 'data/past_assessments.xlsx'. The Agent can now read this!")
