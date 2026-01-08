@@ -1,13 +1,16 @@
+streamlit
 langchain
 langchain-community
 langchain-openai
 langchain-chroma
 chromadb
-pypdf
 pandas
 openpyxl
+pypdf
 docx2txt
 beautifulsoup4
 python-dotenv
 tiktoken
 rich
+sentence-transformers
+watchdog
