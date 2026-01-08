@@ -9,8 +9,8 @@ from langchain_community.document_loaders import (
     WebBaseLoader
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# SWAP: Using Local HuggingFace Embeddings instead of OpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings 
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
 from rich.console import Console
@@ -46,9 +46,8 @@ def load_excel():
     for root, _, files in os.walk(DATA_PATH):
         for file in files:
             if file.endswith(".xlsx"):
-                file_path = os.path.join(root, file)
                 try:
-                    df = pd.read_excel(file_path)
+                    df = pd.read_excel(os.path.join(root, file))
                     text_data = df.to_string(index=False)
                     from langchain.docstore.document import Document
                     docs.append(Document(page_content=text_data, metadata={"source": file}))
@@ -57,50 +56,51 @@ def load_excel():
                     console.print(f"[red]   Failed Excel: {file} ({e})[/red]")
     return docs
 
+def get_embeddings():
+    """Returns OpenAI if key exists, else HuggingFace (Local)."""
+    if os.getenv("OPENAI_API_KEY"):
+        console.print("[bold green]🧠 Using OpenAI Embeddings (Cloud)[/bold green]")
+        return OpenAIEmbeddings()
+    else:
+        console.print("[bold yellow]🧠 Using HuggingFace Embeddings (Local/Free)[/bold yellow]")
+        return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
 def create_vector_db():
-    console.rule("[bold blue]🔄 Omni-Ingest Knowledge Builder (Local Mode)[/bold blue]")
+    console.rule("[bold blue]🔄 Knowledge Base Builder[/bold blue]")
 
     # 1. Clean Slate
     if os.path.exists(DB_PATH):
         shutil.rmtree(DB_PATH)
 
     docs = []
-
-    # 2. PDF & Text
-    try:
-        docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.pdf", loader_cls=PyPDFLoader).load())
-        docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.txt", loader_cls=TextLoader).load())
-    except Exception: pass
-
-    # 3. Word Docs
-    try:
-        docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.docx", loader_cls=Docx2txtLoader).load())
-    except Exception: pass
-
-    # 4. Excel & Web
+    
+    # 2. Load all file types
+    try: docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.pdf", loader_cls=PyPDFLoader).load())
+    except: pass
+    try: docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.txt", loader_cls=TextLoader).load())
+    except: pass
+    try: docs.extend(DirectoryLoader(DATA_PATH, glob="**/*.docx", loader_cls=Docx2txtLoader).load())
+    except: pass
+    
     docs.extend(load_excel())
     docs.extend(load_urls())
 
     if not docs:
-        console.print("[bold red]❌ No documents found in /data! Creating dummy data...[/bold red]")
-        # Create dummy data so the script doesn't fail for the demo
-        from langchain.docstore.document import Document
-        docs.append(Document(page_content="The RTO is 4 hours. Data is encrypted with AES-256.", metadata={"source": "dummy_policy.txt"}))
+        console.print("[bold red]❌ No documents found in /data![/bold red]")
+        return
 
     console.print(f"✅ Total Artifacts: [bold green]{len(docs)}[/bold green]")
 
-    # 5. Chunk & Embed
+    # 3. Chunk & Embed
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_documents(docs)
     
-    console.print("💾 Embedding with [bold yellow]HuggingFace (Local)[/bold yellow]...")
-    
-    # FREE MODE: Uses your local CPU instead of OpenAI API
-    embedding_function = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    console.print("💾 Saving to Vector Database...")
+    embedding_function = get_embeddings()
     
     Chroma.from_documents(chunks, embedding_function, persist_directory=DB_PATH)
     
-    console.print("[bold green]🚀 Knowledge Base Built Successfully! (No API Key Required)[/bold green]")
+    console.print("[bold green]🚀 Knowledge Base Updated Successfully![/bold green]")
 
 if __name__ == "__main__":
     create_vector_db()
