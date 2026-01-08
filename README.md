@@ -6,12 +6,15 @@
 
 **An automated RAG (Retrieval-Augmented Generation) agent designed to streamline Third-Party Risk Management (TPRM).**
 
-This tool ingests your company's "Source of Truth" security artifacts (SOC 2 reports, Policy PDFs, previous SIG questionnaires) and uses a local Vector Database to autonomously answer incoming security questionnaires. 
+This tool ingests your company's "Source of Truth" security artifacts and uses a local Vector Database to autonomously answer incoming security questionnaires.
 
-Unlike generic chatbots, this agent provides **Source Citations** (e.g., "See Page 4 of Access Policy") and **Confidence Scoring** to ensure audit-readiness.
+### ⚡ Hybrid AI Engine
+* **Free / Local Mode:** If no API key is provided, the agent runs **100% offline** using local HuggingFace embeddings (CPU) to search and retrieve relevant evidence.
+* **Enterprise Mode:** If an OpenAI API key is detected, it automatically upgrades to **GPT-4** to generate full, context-aware answers with confidence scoring.
 
 ## ✨ Key Features
 
+* **🔄 Omni-Channel Ingestion:** Automatically ingests and indexes **PDFs**, **Excel** (previous questionnaires), **Word Docs**, and **Website URLs**.
 * **📄 Audit-Ready Citations:** Every answer includes a reference to the specific source document and page number used to generate the response.
 * **🚀 Bulk CSV Processing:** Capable of ingesting a CSV with hundreds of questions and generating a filled response file in minutes.
 * **⚠️ Confidence Flagging:** Automatically flags low-confidence answers or missing data as "Review Required" so you don't accidentally mislead an assessor.
@@ -21,11 +24,12 @@ Unlike generic chatbots, this agent provides **Source Citations** (e.g., "See Pa
 
 ```mermaid
 graph LR
-    A[Policy PDFs / SOC 2] -->|src/ingest.py| B(Vector Database)
+    A[PDF / Excel / Web] -->|src/ingest.py| B(Local Vector DB)
     B -->|ChromaDB| C{AI Agent}
-    D[Incoming CSV] --> C
-    C -->|GPT-4 Retrieval| E[Draft Responses]
-    E --> F[Export to CSV]
+    D[Incoming Questions] --> C
+    C -->|No Key?| E[Search Results (Free)]
+    C -->|API Key?| F[GPT-4 Answer (Paid)]
+    F --> G[Export to CSV]
 ```
 
 ## 🚀 Usage
@@ -40,20 +44,27 @@ cd ai-vendor-response-agent
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 2. Configure Environment (Optional)
 
-Create a `.env` file in the root directory to store your OpenAI API key:
+* **For Search-Only (Free):** You can skip this step.
+* **For AI Answers (Paid):** Create a `.env` file in the root directory:
 
 ```bash
 OPENAI_API_KEY=sk-your-key-here
+LLM_MODEL=gpt-4o  # Optional: default is gpt-4
 ```
 
 ### 3. Build the Knowledge Base
 
-Place your security documents (PDFs, Text files) into the `data/` folder and run the ingestion script. This creates the local Vector Database.
+Place your security artifacts into the `data/` folder. The tool supports:
+* **PDFs:** Policies, SOC 2 Reports.
+* **Excel:** Previous questionnaires (it reads all text).
+* **Word:** Policy documents (`.docx`).
+* **Web:** Create a `data/urls.txt` file and paste links (one per line) to scrape.
+
+Run the ingestion script to build the brain:
 
 ```bash
-# Reads all files in /data and builds the brain
 python src/ingest.py
 ```
 
@@ -75,7 +86,7 @@ python src/agent.py --interactive
 
 ## 📂 Output Format
 
-The tool generates a file named `completed_questions.csv` containing:
+The tool generates a file named `completed_responses.csv` containing:
 
 | Question | AI Response | Status | Evidence |
 | :--- | :--- | :--- | :--- |
@@ -86,7 +97,7 @@ The tool generates a file named `completed_questions.csv` containing:
 
 Do not commit the `data/` folder, `.env` file, or `chroma_db/` directory to GitHub. A `.gitignore` is included to prevent this.
 
-*While the Vector DB is local, the text chunks are sent to OpenAI for embedding and generation. Ensure this aligns with your company's AI usage policy.*
+*While the Vector DB is local, if using the OpenAI mode, text chunks are sent to OpenAI for generation. Ensure this aligns with your company's AI usage policy.*
 
 ## 📜 License
 
