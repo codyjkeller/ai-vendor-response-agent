@@ -27,8 +27,8 @@ graph LR
     A[PDF / Excel / Web] -->|src/ingest.py| B(Local Vector DB)
     B -->|ChromaDB| C{AI Agent}
     D[Incoming Questions] --> C
-    C -->|No Key?| E[Search Results (Free)]
-    C -->|API Key?| F[GPT-4 Answer (Paid)]
+    C -->|No Key?| E["Search Results (Free)"]
+    C -->|API Key?| F["GPT-4 Answer (Paid)"]
     F --> G[Export to CSV]
 ```
 
