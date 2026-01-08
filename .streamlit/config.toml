@@ -1,9 +1,9 @@
 [theme]
-primaryColor = "#00C853"   # That vibrant "Success" green from your screenshot
-backgroundColor = "#FFFFFF" # Clean white background
-secondaryBackgroundColor = "#F0F2F6" # Light grey for sidebar/cards
-textColor = "#262730"       # Sharp dark grey text
-font = "sans serif"         # Base font setting
+primaryColor = "#2e7d32"    # A-SCEND style "Forest Green"
+backgroundColor = "#FFFFFF" # Pure White background
+secondaryBackgroundColor = "#F5F7FA" # Very light grey for cards (not sidebar anymore)
+textColor = "#262730"       # Dark text
+font = "sans serif"
 
 [server]
 enableCORS = false
