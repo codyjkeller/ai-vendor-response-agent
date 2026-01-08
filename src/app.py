@@ -17,11 +17,10 @@ st.set_page_config(
 )
 
 # --- THEME ENGINE (Dark/Light Mode) ---
-# We use session state to track the theme
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
-# Custom CSS for Fonts and Theme Toggling
+# --- CUSTOM CSS (The "Polish" Layer) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
@@ -30,23 +29,64 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    /* Card Styling */
-    div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        color: #00C853; /* Brand Green */
+    /* Navbar / Header Style */
+    .header-container {
+        background-color: #00C853;
+        padding: 1.5rem;
+        border-radius: 0px 0px 10px 10px;
+        margin-bottom: 2rem;
+        color: white;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
-    /* Custom Table Headers */
-    th {
-        background-color: #f0f2f6 !important;
-        color: #444 !important;
+    /* Metric Cards with Colored Borders */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border-left: 5px solid #00C853; /* Green accent on left */
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
     }
+
+    /* Footer Style */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #F0F2F6;
+        color: #666;
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        border-top: 1px solid #ddd;
+        z-index: 100;
+    }
+    
+    /* Dark Mode Overrides */
+    .dark-mode-metric {
+        background-color: #2D2D2D !important;
+        color: white !important;
+        border-left: 5px solid #00C853;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
+# --- UI COMPONENTS ---
+
+def make_footer():
+    st.markdown("""
+    <div class="footer">
+        <p>VendorAI v1.0 | Authorized Use Only | © 2026 Security Operations</p>
+    </div>
+    """, unsafe_allow_html=True)
+
 # --- Sidebar ---
 with st.sidebar:
-    st.title("🛡️ VendorAI")
+    st.image("https://cdn-icons-png.flaticon.com/512/9663/9663853.png", width=50) # Placeholder Logo
+    st.title("VendorAI")
     
     # Navigation
     page = st.radio("Navigation", ["Dashboard", "Questionnaire Assistant", "Settings"])
@@ -62,32 +102,34 @@ with st.sidebar:
         <style>
             .stApp { background-color: #1E1E1E; color: white; }
             section[data-testid="stSidebar"] { background-color: #2D2D2D; }
-            .stMetric { background-color: #2D2D2D !important; border: 1px solid #444; }
-            h1, h2, h3, p { color: white !important; }
-            div[data-testid="stMetricLabel"] { color: #aaa !important; }
+            div[data-testid="stMetric"] { background-color: #2D2D2D !important; border: 1px solid #444; border-left: 5px solid #00C853; }
+            h1, h2, h3, h4, p, span { color: white !important; }
+            .header-container { background-color: #1b5e20; } /* Darker green header */
+            .footer { background-color: #2D2D2D; color: #aaa; border-top: 1px solid #444; }
         </style>
         """, unsafe_allow_html=True)
 
     st.divider()
     
-    # System Status (Keep existing logic)
+    # System Status
     api_key = os.getenv("OPENAI_API_KEY")
+    st.caption("SYSTEM STATUS")
     if api_key:
-        st.success("🟢 AI Engine: Online")
+        st.markdown("🟢 **AI Engine:** Online")
     else:
-        st.warning("🟡 AI Engine: Offline")
+        st.markdown("🟡 **AI Engine:** Offline")
+    
+    db_status = "Active" if os.path.exists("./chroma_db") else "Building..."
+    st.markdown(f"📚 **Knowledge Base:** {db_status}")
 
-# --- Initialize Logic (Keep existing logic) ---
-# Cloud Self-Healing
-if not os.path.exists("./chroma_db"):
-    if os.path.exists("./data"):
-        with st.spinner("🤖 Initializing Knowledge Base..."):
-            try:
-                create_vector_db()
-            except Exception as e:
-                st.error(f"DB Build Failed: {e}")
+# --- Initialize Logic ---
+if not os.path.exists("./chroma_db") and os.path.exists("./data"):
+    with st.spinner("🤖 Initializing Knowledge Base..."):
+        try:
+            create_vector_db()
+        except:
+            pass
 
-# Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "agent" not in st.session_state:
@@ -95,10 +137,10 @@ if "agent" not in st.session_state:
 
 # --- PAGE 1: DASHBOARD ---
 if page == "Dashboard":
-    st.title("Compliance Dashboard")
-    st.caption("Real-time oversight of SOC 2 Type II Engagement")
+    # Custom Header Banner
+    st.markdown('<div class="header-container"><h1>Compliance Dashboard</h1><p>Real-time oversight of SOC 2 Type II Engagement</p></div>', unsafe_allow_html=True)
     
-    # Metrics
+    # Metrics with accent borders
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Completion Status", "50%", "On Track")
@@ -110,13 +152,13 @@ if page == "Dashboard":
         st.metric("Avg Response Time", "1.2s", "AI Assisted")
 
     st.markdown("#### Engagement Progress")
-    # Custom colored progress bar
     st.progress(50)
+    st.caption("📅 Deadline: Feb 28, 2026 | Milestone: Evidence Collection Phase")
 
     st.divider()
     
-    # --- UPGRADED TABLE ---
-    st.subheader("Recent Requests")
+    # Table Section
+    st.subheader("📋 Recent Requests")
     
     data = {
         "Request ID": ["P-1", "P-101", "P-13", "P-135", "P-14"],
@@ -126,7 +168,6 @@ if page == "Dashboard":
     }
     df = pd.DataFrame(data)
 
-    # Display with "Pills" for Status
     st.dataframe(
         df,
         use_container_width=True,
@@ -134,27 +175,17 @@ if page == "Dashboard":
         column_config={
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                help="Current status",
                 width="medium",
                 options=["Accepted", "In Progress", "Review Pending", "Action Required"],
-                # This maps text to specific colors
                 required=True,
             ),
-            "Owner": st.column_config.TextColumn(
-                "Owner",
-                width="small"
-            ),
-            "Description": st.column_config.TextColumn(
-                "Description",
-                width="large"
-            )
         }
     )
 
 # --- PAGE 2: ASSISTANT ---
 elif page == "Questionnaire Assistant":
-    st.title("⚡ Rapid Response Agent")
-    
+    st.markdown('<div class="header-container"><h1>⚡ Rapid Response Agent</h1><p>Upload questionnaires or ask security questions directly.</p></div>', unsafe_allow_html=True)
+
     # Chat Interface
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -194,3 +225,6 @@ elif page == "Questionnaire Assistant":
 elif page == "Settings":
     st.title("Settings")
     st.info("User Management and Knowledge Base Uploads coming soon.")
+
+# Inject Footer
+make_footer()
