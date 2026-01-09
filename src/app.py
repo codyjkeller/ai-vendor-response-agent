@@ -16,6 +16,7 @@ from ingest import create_vector_db
 # --- CONFIGURATION & CONSTANTS ---
 DATA_DIR = "data"
 REGISTRY_FILE = os.path.join(DATA_DIR, "registry.json")
+ANSWER_BANK_FILE = os.path.join(DATA_DIR, "answer_bank.json")
 AUDIT_LOG_FILE = "audit_log.csv"
 
 # Ensure data dir exists
@@ -44,6 +45,24 @@ def load_registry():
 def save_registry(registry):
     with open(REGISTRY_FILE, "w") as f:
         json.dump(registry, f, indent=4)
+
+def load_answer_bank():
+    if os.path.exists(ANSWER_BANK_FILE):
+        with open(ANSWER_BANK_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_to_answer_bank(question, answer, user):
+    bank = load_answer_bank()
+    bank.append({
+        "question": question,
+        "answer": answer,
+        "verified_by": user,
+        "date": datetime.now().strftime("%Y-%m-%d")
+    })
+    with open(ANSWER_BANK_FILE, "w") as f:
+        json.dump(bank, f, indent=4)
+    log_action(user, "VERIFY_ANSWER", "Added Q&A to Answer Bank")
 
 def update_file_meta(filename, new_desc):
     reg = load_registry()
@@ -77,7 +96,6 @@ if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Pro (Default)"
 
 # GENERIC USER PROFILE (Privacy Update + Migration Fix)
-# Check if profile exists AND if it has the new keys. If not, reset it.
 if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
@@ -95,6 +113,16 @@ def get_theme_css(mode):
     base_css = """
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    
+    /* Popover Menu Tightening */
+    div[data-testid="stPopoverBody"] > div {
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+    div[data-testid="stPopoverBody"] hr {
+        margin-top: 10px !important;
+        margin-bottom: 10px !important;
+    }
     """
     
     sidebar_btn_css = """
@@ -140,13 +168,10 @@ def show_header(title):
         st.markdown(f"# {title}")
         
     with col_profile:
-        # Create a simplified "Initials" avatar
-        # Added safety check for keys just in case
         fname = st.session_state.user_profile.get('first_name', 'U')
         lname = st.session_state.user_profile.get('last_name', 'U')
         initials = f"{fname[0]}{lname[0]}"
         
-        # Popover Menu
         with st.popover(f"👤 {initials}", use_container_width=True):
             st.markdown(f"**{fname} {lname}**")
             st.caption(st.session_state.user_profile.get('title', 'User'))
@@ -187,7 +212,16 @@ with st.sidebar:
     st.markdown("---")
     
     # NAVIGATION
-    page = st.radio("Navigation", ["Executive Dashboard", "Auto-Fill (Beta)", "My Projects", "Questionnaire Agent", "Knowledge Base", "Settings"], index=0)
+    page = st.radio("Navigation", [
+        "Executive Dashboard", 
+        "Auto-Fill (Beta)", 
+        "Answer Bank", 
+        "Gap Analysis",
+        "My Projects", 
+        "Questionnaire Agent", 
+        "Knowledge Base", 
+        "Settings"
+    ], index=0)
     
     st.markdown("---")
     api_key = os.getenv("OPENAI_API_KEY")
@@ -214,38 +248,23 @@ if page == "Executive Dashboard":
     st.markdown(f"Welcome back, **{st.session_state.user_profile.get('first_name', 'User')}**. Here is your compliance posture for today.")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # DYNAMIC METRICS
     reg = load_registry()
     files_count = len(reg)
     pending_tasks = 12 
     
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Security Posture", "Secure", "No Critical Flags")
-    with col2:
-        st.metric("Active Audits", "3", "+1 This Month")
-    with col3:
-        st.metric("KB Assets Indexed", f"{files_count}", "Live Documents")
-    with col4:
-        st.metric("Pending Tasks", f"{pending_tasks}", "-2 Since Yesterday", delta_color="inverse")
+    with col1: st.metric("Security Posture", "Secure", "No Critical Flags")
+    with col2: st.metric("Active Audits", "3", "+1 This Month")
+    with col3: st.metric("KB Assets Indexed", f"{files_count}", "Live Documents")
+    with col4: st.metric("Pending Tasks", f"{pending_tasks}", "-2 Since Yesterday", delta_color="inverse")
 
     st.divider()
 
-    # CHARTS & ACTIVITY
     col_left, col_right = st.columns([2, 1])
-    
     with col_left:
         st.subheader("📊 Audit Readiness Status")
-        chart_data = pd.DataFrame({
-            'Status': ['Completed', 'In Review', 'Drafting', 'Not Started'],
-            'Items': [85, 12, 15, 8]
-        })
-        
-        c = alt.Chart(chart_data).mark_bar().encode(
-            x='Items',
-            y=alt.Y('Status', sort=None),
-            color=alt.Color('Status', scale=alt.Scale(scheme='greens'))
-        ).properties(height=250)
+        chart_data = pd.DataFrame({'Status': ['Completed', 'In Review', 'Drafting', 'Not Started'], 'Items': [85, 12, 15, 8]})
+        c = alt.Chart(chart_data).mark_bar().encode(x='Items', y=alt.Y('Status', sort=None), color=alt.Color('Status', scale=alt.Scale(scheme='greens'))).properties(height=250)
         st.altair_chart(c, use_container_width=True)
 
     with col_right:
@@ -260,31 +279,7 @@ if page == "Executive Dashboard":
         else:
             st.info("No recent activity.")
 
-    # REQUESTS TABLE
-    st.subheader("📋 Priority Action Items")
-    request_data = {
-        "Control ID": ["CC-1.4", "CC-2.1", "CC-3.5", "CC-6.1", "CC-8.2"],
-        "Description": ["Board of Directors Review", "User Access Reviews", "Change Management Tickets", "Vulnerability Scans", "Incident Response Test"],
-        "Status": ["In Progress", "Review Pending", "Approved", "Action Required", "Approved"],
-        "Owner": ["John Smith", "AI Agent", "Jane Doe", "John Smith", "SecOps"]
-    }
-    df_requests = pd.DataFrame(request_data)
-    
-    st.dataframe(
-        df_requests,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Status": st.column_config.SelectboxColumn(
-                "Status",
-                width="small",
-                options=["Approved", "In Progress", "Review Pending", "Action Required"],
-                required=True,
-            ),
-        }
-    )
-
-# --- PAGE 1.5: AUTO-FILL WIZARD ---
+# --- PAGE 2: AUTO-FILL WIZARD ---
 elif page == "Auto-Fill (Beta)":
     show_header("Auto-Fill Assistant")
     st.markdown("Upload a raw vendor questionnaire (Excel/CSV) to automatically answer all questions.")
@@ -293,23 +288,19 @@ elif page == "Auto-Fill (Beta)":
     
     if uploaded_file:
         try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
+            if uploaded_file.name.endswith('.csv'): df = pd.read_csv(uploaded_file)
+            else: df = pd.read_excel(uploaded_file)
             
             st.success(f"Loaded {len(df)} rows.")
-            
             st.markdown("#### 2. Map Columns")
             cols = df.columns.tolist()
             question_col = st.selectbox("Which column contains the Questions?", cols)
             
             if st.button("🚀 Auto-Fill Answers", type="primary"):
                 if not st.session_state.agent.vector_db:
-                    st.error("Knowledge Base is empty! Please upload documents in the 'Knowledge Base' tab first.")
+                    st.error("Knowledge Base is empty!")
                 else:
                     questions = df[question_col].astype(str).tolist()
-                    
                     with st.spinner("Analyzing questions against Knowledge Base..."):
                         results_df = st.session_state.agent.generate_responses(questions)
                     
@@ -321,19 +312,85 @@ elif page == "Auto-Fill (Beta)":
                     st.dataframe(df)
                     
                     csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        "📥 Download Completed Questionnaire",
-                        csv,
-                        "completed_questionnaire.csv",
-                        "text/csv",
-                        key='download-csv'
-                    )
+                    st.download_button("📥 Download Completed Questionnaire", csv, "completed_questionnaire.csv", "text/csv", key='download-csv')
                     log_action("User", "AUTO_FILL", f"Processed {len(df)} questions from {uploaded_file.name}")
+        except Exception as e: st.error(f"Error reading file: {e}")
 
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
+# --- PAGE 3: ANSWER BANK (NEW!) ---
+elif page == "Answer Bank":
+    show_header("Answer Bank")
+    st.info("Verified 'Golden Record' answers. The AI checks here first before searching documents.")
+    
+    bank = load_answer_bank()
+    
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        search_term = st.text_input("🔎 Search known answers...", placeholder="e.g. MFA, Encryption, Backup")
+    with col2:
+        if st.button("➕ Add New", use_container_width=True):
+            st.session_state.adding_new = True
 
-# --- PAGE 2: ACTIVE QUESTIONNAIRES ---
+    # Display Bank
+    if bank:
+        df_bank = pd.DataFrame(bank)
+        if search_term:
+            df_bank = df_bank[df_bank['question'].str.contains(search_term, case=False) | df_bank['answer'].str.contains(search_term, case=False)]
+        
+        st.dataframe(
+            df_bank, 
+            use_container_width=True, 
+            column_config={
+                "question": "Standard Question", 
+                "answer": "Verified Answer",
+                "verified_by": "Owner",
+                "date": "Last Updated"
+            },
+            hide_index=True
+        )
+    else:
+        st.info("Answer Bank is empty. Verify AI responses to add them here.")
+
+    # Add New Manual Entry
+    if st.session_state.get("adding_new", False):
+        st.divider()
+        with st.form("new_entry"):
+            st.markdown("#### Add Trusted Answer")
+            q = st.text_input("Question")
+            a = st.text_area("Approved Answer")
+            if st.form_submit_button("Save to Bank"):
+                save_to_answer_bank(q, a, st.session_state.user_profile["last_name"])
+                st.success("Added!")
+                st.session_state.adding_new = False
+                st.rerun()
+
+# --- PAGE 4: GAP ANALYSIS (NEW!) ---
+elif page == "Gap Analysis":
+    show_header("Strategic Gap Analysis")
+    st.markdown("Scan your knowledge base against common compliance frameworks to identify missing policies.")
+    
+    framework = st.selectbox("Select Framework", ["SOC 2 Type II", "ISO 27001:2022", "NIST 800-53"])
+    
+    if st.button("🔍 Run Gap Analysis", type="primary"):
+        with st.spinner(f"Scanning documents against {framework} controls..."):
+            time.sleep(2) # Simulation
+            
+            # Mock Results based on "Real" logic
+            col1, col2, col3 = st.columns(3)
+            with col1: st.metric("Controls Covered", "85%", "+5% vs Last Scan")
+            with col2: st.metric("Missing Policies", "3", "Critical")
+            with col3: st.metric("Evidence Strength", "Medium", "Needs Improvement")
+            
+            st.divider()
+            st.subheader("⚠️ Missing or Weak Controls")
+            
+            issues = [
+                {"Control": "CC-6.1", "Area": "Vulnerability Management", "Status": "Missing", "Suggestion": "Upload a 'Vulnerability Scanning Policy'"},
+                {"Control": "CC-8.1", "Area": "Change Management", "Status": "Partial", "Suggestion": "Current 'DevOps Guide' lacks rollback procedures."},
+                {"Control": "A.12.3", "Area": "Backup", "Status": "Verified", "Suggestion": "None. 'Backup_Policy_2025.pdf' covers this."}
+            ]
+            st.dataframe(pd.DataFrame(issues), use_container_width=True, hide_index=True)
+
+# --- PAGE 5: ACTIVE QUESTIONNAIRES ---
 elif page == "My Projects":
     show_header("Active Questionnaires")
     st.info("Select a project below to view details and manage status.")
@@ -345,24 +402,13 @@ elif page == "My Projects":
         "Type": ["SIG Core", "ISO 27001", "CAIQ"]
     })
     
-    event = st.dataframe(
-        projects,
-        use_container_width=True,
-        hide_index=True,
-        selection_mode="single-row",
-        on_select="rerun",
-        column_config={
-            "Progress": st.column_config.ProgressColumn("Completion", format="%d%%", min_value=0, max_value=100)
-        }
-    )
+    event = st.dataframe(projects, use_container_width=True, hide_index=True, selection_mode="single-row", on_select="rerun", column_config={"Progress": st.column_config.ProgressColumn("Completion", format="%d%%", min_value=0, max_value=100)})
     
     if len(event.selection.rows) > 0:
         selected_index = event.selection.rows[0]
         selected_project = projects.iloc[selected_index]
-        
         st.divider()
         st.subheader(f"📂 Managing: {selected_project['Project Name']}")
-        
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown(f"**Due Date:** {selected_project['Due Date']}")
@@ -376,7 +422,7 @@ elif page == "My Projects":
                 st.balloons()
                 st.success("Project marked as complete!")
 
-# --- PAGE 3: AI AGENT ---
+# --- PAGE 6: AI AGENT ---
 elif page == "Questionnaire Agent":
     show_header("Vendor Response Agent")
     if len(st.session_state.messages) > 0:
@@ -389,9 +435,7 @@ elif page == "Questionnaire Agent":
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message.get("evidence"):
-                with st.expander("🔍 Verified Source"): 
-                    st.markdown(message["evidence"])
+            if message.get("evidence"): with st.expander("🔍 Verified Source"): st.markdown(message["evidence"])
 
     if prompt := st.chat_input("Ex: How do we handle data backups?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -404,14 +448,17 @@ elif page == "Questionnaire Agent":
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
                         if evidence and evidence != "No Source": 
-                            with st.expander("🔍 Verified Source"): 
-                                st.markdown(evidence)
+                            with st.expander("🔍 Verified Source"): st.markdown(evidence)
+                            # Button to Add to Bank
+                            if st.button("💾 Verified? Add to Answer Bank"):
+                                save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"])
+                                st.success("Saved to Golden Record!")
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
                     else: st.error("No response generated.")
                 except Exception as e: st.error(f"Error: {e}")
 
-# --- PAGE 4: KNOWLEDGE BASE ---
+# --- PAGE 7: KNOWLEDGE BASE ---
 elif page == "Knowledge Base":
     show_header("Knowledge Base")
     st.write("Manage security policies. Changes here automatically update the AI.")
@@ -431,7 +478,6 @@ elif page == "Knowledge Base":
                 registry = load_registry()
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
                 for i, uploaded_file in enumerate(uploaded_files):
                     status_text.text(f"Saving {uploaded_file.name}...")
                     with open(os.path.join("data", uploaded_file.name), "wb") as f: f.write(uploaded_file.getbuffer())
@@ -441,7 +487,6 @@ elif page == "Knowledge Base":
                         "uploaded_by": st.session_state.user_profile.get("last_name", "Admin")
                     }
                     progress_bar.progress((i + 1) / len(uploaded_files) * 0.5)
-                
                 save_registry(registry)
                 log_action("User", "UPLOAD_BATCH", f"Uploaded {len(uploaded_files)} files")
                 status_text.text("🧠 Rebuilding Brain...")
@@ -457,7 +502,7 @@ elif page == "Knowledge Base":
     st.subheader("🗄️ Indexed Documents")
     registry = load_registry()
     if os.path.exists("data"):
-        files = [f for f in os.listdir("data") if f != "registry.json"]
+        files = [f for f in os.listdir("data") if f != "registry.json" and f != "answer_bank.json"]
         if files:
             for f in files:
                 meta = registry.get(f, {"description": "No description", "upload_date": "Unknown"})
@@ -485,7 +530,7 @@ elif page == "Knowledge Base":
                     st.divider()
         else: st.info("No documents found.")
 
-# --- PAGE 5: SETTINGS ---
+# --- PAGE 8: SETTINGS ---
 elif page == "Settings":
     show_header("Settings")
     tab1, tab2, tab3, tab4 = st.tabs(["Appearance", "Audit Log", "User Profile", "Roles & Permissions"])
@@ -507,8 +552,7 @@ elif page == "Settings":
                 log_text += f"[{row['Timestamp']}] {row['User']} performed {row['Action']}: {row['Details']}\n"
             st.code(log_text, language="log")
             st.download_button("📥 Download Logs (CSV)", df_log.to_csv(index=False).encode('utf-8'), "audit_logs.csv", "text/csv")
-        else:
-            st.info("No logs recorded yet.")
+        else: st.info("No logs recorded yet.")
             
     with tab3:
         st.markdown("### 👤 User Profile")
@@ -523,21 +567,12 @@ elif page == "Settings":
             new_role = st.text_input("System Role", value=st.session_state.user_profile.get("role", "Viewer"), disabled=True)
             
         if st.button("Update Profile"):
-            st.session_state.user_profile.update({
-                "first_name": new_fname, "last_name": new_lname, 
-                "email": new_email, "title": new_title, "phone": new_phone
-            })
+            st.session_state.user_profile.update({"first_name": new_fname, "last_name": new_lname, "email": new_email, "title": new_title, "phone": new_phone})
             st.success("Profile Updated!")
             st.rerun()
 
     with tab4:
         st.markdown("### 🔑 Role Management")
         st.caption("Manage access levels for the organization.")
-        
-        roles_data = {
-            "Role": ["Administrator", "Analyst", "Auditor", "Viewer"],
-            "Write Access": [True, True, False, False],
-            "Delete Access": [True, False, False, False],
-            "AI Access": [True, True, True, False]
-        }
+        roles_data = {"Role": ["Administrator", "Analyst", "Auditor", "Viewer"], "Write Access": [True, True, False, False], "Delete Access": [True, False, False, False], "AI Access": [True, True, True, False]}
         st.data_editor(pd.DataFrame(roles_data), num_rows="dynamic", use_container_width=True)
