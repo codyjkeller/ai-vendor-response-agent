@@ -6,7 +6,7 @@ import json
 import csv
 import time
 import altair as alt
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- Path Setup ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -52,17 +52,19 @@ def load_answer_bank():
             return json.load(f)
     return []
 
-def save_to_answer_bank(question, answer, user):
+def save_to_answer_bank(question, answer, user, product, subsidiary):
     bank = load_answer_bank()
     bank.append({
         "question": question,
         "answer": answer,
+        "product": product,
+        "subsidiary": subsidiary,
         "verified_by": user,
         "date": datetime.now().strftime("%Y-%m-%d")
     })
     with open(ANSWER_BANK_FILE, "w") as f:
         json.dump(bank, f, indent=4)
-    log_action(user, "VERIFY_ANSWER", "Added Q&A to Answer Bank")
+    log_action(user, "VERIFY_ANSWER", f"Added Q&A for {product}")
 
 def update_file_meta(filename, new_desc):
     reg = load_registry()
@@ -93,11 +95,11 @@ st.set_page_config(
 
 # --- THEME & SESSION STATE ---
 if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Pro (Default)"
+    st.session_state.theme_mode = "Light Mode" # Default to Light Mode
 
 # INITIALIZE SESSION STATE
 if "auth_stage" not in st.session_state:
-    st.session_state.auth_stage = "login" # login, mfa, authenticated, forgot_password
+    st.session_state.auth_stage = "login"
 if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
@@ -180,7 +182,7 @@ if st.session_state.auth_stage != "authenticated":
         # 1. LOGIN SCREEN
         if st.session_state.auth_stage == "login":
             st.markdown("## 🛡️ AuditFlow Secure Login")
-            st.info("Identity Provider: SoundThinking SSO")
+            st.info("Identity Provider: Azure AD")
             
             with st.form("login_form"):
                 st.text_input("Username", value="john.smith@auditflow.io")
@@ -361,7 +363,11 @@ elif page == "Answer Bank":
     if bank:
         df_bank = pd.DataFrame(bank)
         if search_term:
-            df_bank = df_bank[df_bank['question'].str.contains(search_term, case=False) | df_bank['answer'].str.contains(search_term, case=False)]
+            df_bank = df_bank[
+                df_bank['question'].str.contains(search_term, case=False) | 
+                df_bank['answer'].str.contains(search_term, case=False) |
+                df_bank['product'].str.contains(search_term, case=False)
+            ]
         
         st.dataframe(
             df_bank, 
@@ -369,6 +375,8 @@ elif page == "Answer Bank":
             column_config={
                 "question": "Standard Question", 
                 "answer": "Verified Answer",
+                "product": "Product",
+                "subsidiary": "Subsidiary",
                 "verified_by": "Owner",
                 "date": "Last Updated"
             },
@@ -381,10 +389,17 @@ elif page == "Answer Bank":
         st.divider()
         with st.form("new_entry"):
             st.markdown("#### Add Trusted Answer")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                prod = st.text_input("Product", placeholder="e.g. Cloud Platform")
+            with col_b:
+                sub = st.text_input("Subsidiary", placeholder="e.g. North America")
+            
             q = st.text_input("Question")
             a = st.text_area("Approved Answer")
+            
             if st.form_submit_button("Save to Bank"):
-                save_to_answer_bank(q, a, st.session_state.user_profile["last_name"])
+                save_to_answer_bank(q, a, st.session_state.user_profile["last_name"], prod, sub)
                 st.success("Added!")
                 st.session_state.adding_new = False
                 st.rerun()
@@ -483,8 +498,10 @@ elif page == "Questionnaire Agent":
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Verified Source"): 
                                 st.markdown(evidence)
+                            # Button to Add to Bank
                             if st.button("💾 Verified? Add to Answer Bank"):
-                                save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"])
+                                # Default generic product/sub for quick add
+                                save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"], "General", "All")
                                 st.success("Saved to Golden Record!")
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
@@ -500,6 +517,10 @@ elif page == "Knowledge Base":
         uploaded_files = st.file_uploader("Select Files (PDF, DOCX, XLSX)", accept_multiple_files=True)
         if uploaded_files:
             st.markdown("#### 📝 Document Details")
+            
+            # Global Review Date for the batch
+            review_date = st.date_input("Next Review Date", value=datetime.now() + timedelta(days=365))
+            
             file_meta = {}
             for f in uploaded_files:
                 col1, col2 = st.columns([1, 2])
@@ -517,6 +538,7 @@ elif page == "Knowledge Base":
                     registry[uploaded_file.name] = {
                         "description": file_meta[uploaded_file.name],
                         "upload_date": datetime.now().strftime("%Y-%m-%d"),
+                        "review_date": str(review_date),
                         "uploaded_by": st.session_state.user_profile.get("last_name", "Admin")
                     }
                     progress_bar.progress((i + 1) / len(uploaded_files) * 0.5)
@@ -538,13 +560,15 @@ elif page == "Knowledge Base":
         files = [f for f in os.listdir("data") if f != "registry.json" and f != "answer_bank.json"]
         if files:
             for f in files:
-                meta = registry.get(f, {"description": "No description", "upload_date": "Unknown"})
+                meta = registry.get(f, {"description": "No description", "upload_date": "Unknown", "review_date": "Unknown"})
                 with st.container():
                     c1, c2, c3, c4, c5 = st.columns([0.5, 2, 3, 1.5, 1])
                     with c1: st.markdown("📄")
                     with c2: 
                         st.markdown(f"**{f}**")
-                        st.caption(f"📅 {meta['upload_date']}")
+                        st.caption(f"📅 Uploaded: {meta['upload_date']}")
+                        if 'review_date' in meta:
+                            st.caption(f"⏰ Review By: {meta['review_date']}")
                     with c3:
                         new_desc = st.text_input("Description", value=meta['description'], key=f"edit_{f}", label_visibility="collapsed")
                     with c4:
@@ -607,25 +631,9 @@ elif page == "Settings":
     with tab4:
         st.markdown("### 🔑 Role Management")
         st.caption("Manage access levels for the organization.")
-        
-        # Initialize role data in session state if not present
         if "role_data" not in st.session_state:
-            st.session_state.role_data = pd.DataFrame({
-                "Role": ["Administrator", "Analyst", "Auditor", "Viewer"],
-                "Write Access": [True, True, False, False],
-                "Delete Access": [True, False, False, False],
-                "AI Access": [True, True, True, False]
-            })
-
-        # Editable Dataframe
-        edited_df = st.data_editor(
-            st.session_state.role_data, 
-            num_rows="dynamic", 
-            use_container_width=True,
-            key="role_editor"
-        )
-        
-        # Explicit Save Button
+            st.session_state.role_data = pd.DataFrame({"Role": ["Administrator", "Analyst", "Auditor", "Viewer"], "Write Access": [True, True, False, False], "Delete Access": [True, False, False, False], "AI Access": [True, True, True, False]})
+        edited_df = st.data_editor(st.session_state.role_data, num_rows="dynamic", use_container_width=True, key="role_editor")
         if st.button("💾 Save Permission Changes", type="primary"):
             st.session_state.role_data = edited_df
             st.success("Permissions updated successfully!")
