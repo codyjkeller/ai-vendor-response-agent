@@ -1,16 +1,3 @@
-This is a smart structural change. Moving "Settings" to a dedicated page with tabs (Appearance, Audit Logs, Profile) is standard for enterprise software and gives us way more room to grow than a small pop-up menu.
-
-Here is the plan for this update:
-
-1. **New "Settings" Page:** A full page with three tabs: **Appearance**, **Audit Logs**, and **User Profile**.
-2. **Knowledge Base Upgrade:** I added an "Update" button next to every file. You can now type a new description, hit "Save," and it updates the registry immediately. I also made sure "Uploaded Date" is clearly visible.
-3. **Refactored Menu:** "Preferences" is gone. "Settings" is now a main navigation item.
-
-### 🛠️ The "Settings & Metadata" Update (`src/app.py`)
-
-Overwrite your `src/app.py` with this version.
-
-```python
 import streamlit as st
 import pandas as pd
 import os
@@ -338,5 +325,3 @@ elif page == "Settings":
         if st.button("Update Profile"):
             st.session_state.user_profile = {"name": new_name, "email": new_email, "role": new_role}
             st.success("Profile Updated!")
-
-```
