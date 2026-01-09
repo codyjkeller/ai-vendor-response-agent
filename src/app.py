@@ -435,7 +435,9 @@ elif page == "Questionnaire Agent":
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message.get("evidence"): with st.expander("🔍 Verified Source"): st.markdown(message["evidence"])
+            if message.get("evidence"): 
+                with st.expander("🔍 Verified Source"): 
+                    st.markdown(message["evidence"])
 
     if prompt := st.chat_input("Ex: How do we handle data backups?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -448,7 +450,8 @@ elif page == "Questionnaire Agent":
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
                         if evidence and evidence != "No Source": 
-                            with st.expander("🔍 Verified Source"): st.markdown(evidence)
+                            with st.expander("🔍 Verified Source"): 
+                                st.markdown(evidence)
                             # Button to Add to Bank
                             if st.button("💾 Verified? Add to Answer Bank"):
                                 save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"])
