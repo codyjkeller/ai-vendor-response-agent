@@ -28,33 +28,69 @@ def get_theme_css(mode):
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     """
     
+    # 1. FIX: PREFERENCES BUTTON STYLING
+    # This targets the button inside the sidebar to make it white with dark text
+    popover_css = """
+    /* Style the Preferences Button in Sidebar */
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background-color: #F3F4F6 !important;
+        color: #111827 !important;
+        border: none !important;
+        font-weight: 500 !important;
+        width: 100% !important;
+        text-align: left !important;
+        padding-left: 15px !important;
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background-color: #E5E7EB !important;
+    }
+    """
+    
     if mode == "Pro (Default)":
-        return base_css + """
+        return base_css + popover_css + """
         /* Navy Sidebar / White Main */
         section[data-testid="stSidebar"] { background-color: #111827; color: white; }
-        section[data-testid="stSidebar"] * { color: #E5E7EB !important; }
+        section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p { color: #E5E7EB !important; }
         .stApp { background-color: #FFFFFF; color: #111827; }
-        div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #e0e0e0; border-left: 5px solid #2e7d32; }
+        
+        /* 2. FIX: METRIC CARD SPACING */
+        div[data-testid="stMetric"] { 
+            background-color: #ffffff; 
+            border: 1px solid #e0e0e0; 
+            border-left: 5px solid #2e7d32; 
+            padding: 15px 20px !important; /* Added padding for breathing room */
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
         .main-header { color: #111827; }
         """
         
     elif mode == "Dark Mode":
-        return base_css + """
+        return base_css + popover_css + """
         /* Full Dark */
         section[data-testid="stSidebar"] { background-color: #1f1f1f; }
         .stApp { background-color: #121212; color: #E0E0E0; }
-        div[data-testid="stMetric"] { background-color: #2D2D2D; border: 1px solid #444; border-left: 5px solid #00C853; }
+        
+        div[data-testid="stMetric"] { 
+            background-color: #2D2D2D; 
+            border: 1px solid #444; 
+            border-left: 5px solid #00C853; 
+            padding: 15px 20px !important;
+            border-radius: 8px;
+        }
+        
         h1, h2, h3, p, span, div { color: #E0E0E0 !important; }
         .main-header { color: #ffffff !important; }
         """
         
     elif mode == "Light Mode":
-        return base_css + """
+        return base_css + popover_css + """
         /* Full Light */
         section[data-testid="stSidebar"] { background-color: #F0F2F6; }
         section[data-testid="stSidebar"] * { color: #333 !important; }
         .stApp { background-color: #FFFFFF; color: #333; }
-        div[data-testid="stMetric"] { background-color: #F9F9F9; border: 1px solid #ddd; }
+        div[data-testid="stMetric"] { background-color: #F9F9F9; border: 1px solid #ddd; padding: 15px 20px; border-radius: 8px; }
         .main-header { color: #333; }
         """
     return base_css
@@ -64,8 +100,14 @@ st.markdown(f"<style>{get_theme_css(st.session_state.theme_mode)}</style>", unsa
 st.markdown("""
 <style>
     /* Global Helpers */
-    .main-header { font-size: 24px; font-weight: 600; margin-bottom: 20px; }
-    .stProgress > div > div > div > div { background-color: #2e7d32; }
+    .main-header { font-size: 26px; font-weight: 600; margin-bottom: 25px; }
+    
+    /* Thicker Progress Bar */
+    .stProgress > div > div > div > div { 
+        background-color: #2e7d32; 
+        height: 12px; 
+        border-radius: 6px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,13 +127,15 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # POP-OUT PREFERENCES MENU
-    with st.popover("⚙️ Preferences"):
-        st.markdown("### Appearance")
+    # POP-OUT PREFERENCES MENU (Fixed Styling)
+    # The CSS above will now make this button white with dark text
+    with st.popover("⚙️ Preferences", use_container_width=True):
+        st.markdown("### 🎨 Appearance")
         selected_theme = st.radio(
-            "Theme", 
+            "Interface Theme", 
             ["Pro (Default)", "Dark Mode", "Light Mode"],
-            index=["Pro (Default)", "Dark Mode", "Light Mode"].index(st.session_state.theme_mode)
+            index=["Pro (Default)", "Dark Mode", "Light Mode"].index(st.session_state.theme_mode),
+            key="theme_selector"
         )
         if selected_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = selected_theme
@@ -107,7 +151,6 @@ with st.sidebar:
 # --- INITIALIZE LOGIC ---
 if not os.path.exists("./chroma_db") and os.path.exists("./data"):
     try:
-        # Only build if we haven't built it in this session yet
         if "db_built" not in st.session_state:
             create_vector_db()
             st.session_state.db_built = True
@@ -123,7 +166,7 @@ if "agent" not in st.session_state:
 if page == "Dashboard":
     st.markdown('<div class="main-header">Current Assessment Overview</div>', unsafe_allow_html=True)
     
-    # Generic Metrics
+    # Fixed Metrics with Padding
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Completion", "65%", "In Progress")
@@ -193,15 +236,13 @@ elif page == "My Projects":
         hide_index=True
     )
 
-# --- PAGE 3: AI AGENT (Now with Export!) ---
+# --- PAGE 3: AI AGENT (Export Fix) ---
 elif page == "Questionnaire Agent":
     st.markdown('<div class="main-header">⚡ Vendor Response Agent</div>', unsafe_allow_html=True)
     
-    # 1. Export Button Logic
     if len(st.session_state.messages) > 0:
         col_export, col_dummy = st.columns([1, 5])
         with col_export:
-            # Prepare data for export
             export_data = []
             for msg in st.session_state.messages:
                 if msg["role"] == "assistant":
@@ -229,7 +270,6 @@ elif page == "Questionnaire Agent":
 
     st.info("Paste a question from any Excel/Portal (SIG, CAIQ, VSA) to get an instant answer.")
 
-    # 2. Chat Interface
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -265,44 +305,36 @@ elif page == "Questionnaire Agent":
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-# --- PAGE 4: KNOWLEDGE BASE (Now with Upload!) ---
+# --- PAGE 4: KNOWLEDGE BASE ---
 elif page == "Knowledge Base":
     st.markdown('<div class="main-header">📚 Knowledge Base</div>', unsafe_allow_html=True)
     st.write("Upload your security policies and past questionnaires here to update the AI's brain.")
     
-    # 1. File Uploader
     uploaded_files = st.file_uploader(
         "📂 Drag and drop Policy PDFs or Excel files", 
         type=["pdf", "docx", "xlsx"], 
         accept_multiple_files=True
     )
     
-    # 2. Process Button
     if uploaded_files:
         if st.button("⚡ Process and Index Files"):
-            # Create data directory if missing
             os.makedirs("data", exist_ok=True)
             
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # Save files
             for i, uploaded_file in enumerate(uploaded_files):
                 status_text.text(f"Saving {uploaded_file.name}...")
                 with open(os.path.join("data", uploaded_file.name), "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 progress_bar.progress((i + 1) / len(uploaded_files) * 0.5)
             
-            # Re-run Ingestion
             status_text.text("🧠 Rebuilding Knowledge Base (This may take a moment)...")
             try:
                 create_vector_db()
                 progress_bar.progress(100)
                 status_text.success("✅ Indexing Complete! The AI is now updated.")
-                
-                # Force reload of agent
                 st.session_state.agent = VendorResponseAgent()
-                
             except Exception as e:
                 st.error(f"Ingestion failed: {e}")
 
@@ -317,7 +349,6 @@ elif page == "Knowledge Base":
             st.warning("⚠️ **Database Missing**")
             
     with col2:
-        # Show list of files in data folder if it exists
         if os.path.exists("data"):
             files = os.listdir("data")
             st.caption(f"**Indexed Files ({len(files)}):**")
