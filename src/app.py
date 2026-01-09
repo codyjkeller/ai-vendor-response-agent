@@ -4,6 +4,8 @@ import os
 import sys
 import json
 import csv
+import time
+import altair as alt
 from datetime import datetime
 
 # --- Path Setup ---
@@ -44,7 +46,6 @@ def save_registry(registry):
         json.dump(registry, f, indent=4)
 
 def update_file_meta(filename, new_desc):
-    """Updates the description of an existing file."""
     reg = load_registry()
     if filename in reg:
         reg[filename]["description"] = new_desc
@@ -57,17 +58,15 @@ def delete_file(filename):
     filepath = os.path.join(DATA_DIR, filename)
     if os.path.exists(filepath):
         os.remove(filepath)
-    
     reg = load_registry()
     if filename in reg:
         del reg[filename]
         save_registry(reg)
-    
     log_action("Admin", "DELETE_FILE", f"Deleted {filename}")
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="AuditFlow - Response Hub",
+    page_title="AuditFlow - Secure Access",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -77,7 +76,9 @@ st.set_page_config(
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Pro (Default)"
 if "user_profile" not in st.session_state:
-    st.session_state.user_profile = {"name": "Cody Keller", "email": "cody@example.com", "role": "Security Analyst"}
+    st.session_state.user_profile = {"name": "Cody Keller", "email": "cody@auditflow.io", "role": "CISO"}
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
 def get_theme_css(mode):
     base_css = """
@@ -88,49 +89,66 @@ def get_theme_css(mode):
         return base_css + """
         section[data-testid="stSidebar"] { background-color: #111827; color: white; }
         section[data-testid="stSidebar"] * { color: #E5E7EB !important; }
-        .stApp { background-color: #FFFFFF; color: #111827; }
-        div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #e0e0e0; border-left: 5px solid #2e7d32; padding: 15px 20px !important; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .main-header { color: #111827; }
+        .stApp { background-color: #F9FAFB; color: #111827; }
+        div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .metric-label { font-size: 0.875rem; color: #6B7280; }
+        .metric-value { font-size: 1.5rem; font-weight: 600; color: #111827; }
         """
     elif mode == "Dark Mode":
         return base_css + """
         section[data-testid="stSidebar"] { background-color: #1f1f1f; }
-        .stApp { background-color: #121212; color: #E0E0E0; }
-        div[data-testid="stMetric"] { background-color: #2D2D2D; border: 1px solid #444; border-left: 5px solid #00C853; padding: 15px 20px !important; border-radius: 8px; }
-        h1, h2, h3, p, span, div { color: #E0E0E0 !important; }
-        .main-header { color: #ffffff !important; }
+        .stApp { background-color: #0E1117; color: #E0E0E0; }
+        div[data-testid="stMetric"] { background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 15px; }
         """
     elif mode == "Light Mode":
         return base_css + """
         section[data-testid="stSidebar"] { background-color: #F0F2F6; }
-        section[data-testid="stSidebar"] * { color: #333 !important; }
         .stApp { background-color: #FFFFFF; color: #333; }
-        div[data-testid="stMetric"] { background-color: #F9F9F9; border: 1px solid #ddd; padding: 15px 20px; border-radius: 8px; }
-        .main-header { color: #333; }
         """
     return base_css
 
 st.markdown(f"<style>{get_theme_css(st.session_state.theme_mode)}</style>", unsafe_allow_html=True)
-st.markdown("""
-<style>
-    .main-header { font-size: 26px; font-weight: 600; margin-bottom: 25px; }
-    .stProgress > div > div > div > div { background-color: #2e7d32; height: 12px; border-radius: 6px; }
-</style>
-""", unsafe_allow_html=True)
+
+# --- LOGIN SCREEN LOGIC ---
+if not st.session_state.logged_in:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.markdown("## 🛡️ AuditFlow Secure Login")
+        st.info("Identity Provider: SoundThinking SSO")
+        
+        with st.form("login_form"):
+            st.text_input("Username", value="cody.keller@auditflow.io")
+            st.text_input("Password", type="password", value="password123")
+            submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+            
+            if submitted:
+                with st.spinner("Authenticating..."):
+                    time.sleep(1) # Fake delay for realism
+                    st.session_state.logged_in = True
+                    log_action("System", "USER_LOGIN", "User logged in successfully")
+                    st.rerun()
+    st.stop() # Stop execution here if not logged in
+
+# --- MAIN APP START ---
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🛡️ AuditFlow")
-    st.caption("Security Questionnaire Assistant")
+    st.caption("Enterprise Compliance")
     st.markdown("---")
     
     # NAVIGATION
-    page = st.radio("Menu", ["Dashboard", "My Projects", "Questionnaire Agent", "Knowledge Base", "Settings"], index=0)
+    page = st.radio("Navigation", ["Executive Dashboard", "My Projects", "Questionnaire Agent", "Knowledge Base", "Settings"], index=0)
     
     st.markdown("---")
     api_key = os.getenv("OPENAI_API_KEY")
     status_icon = "🟢" if api_key else "🟡"
-    st.caption(f"{status_icon} Engine: Online")
+    st.caption(f"{status_icon} AI Engine: Online")
+    
+    if st.button("Log Out", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
 
 # --- INITIALIZATION ---
 if not os.path.exists("./chroma_db") and os.path.exists("./data"):
@@ -146,32 +164,93 @@ if "messages" not in st.session_state:
 if "agent" not in st.session_state:
     st.session_state.agent = VendorResponseAgent()
 
-# --- PAGE 1: DASHBOARD ---
-if page == "Dashboard":
-    st.markdown('<div class="main-header">Current Assessment Overview</div>', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Completion", "65%", "In Progress")
-    with col2: st.metric("Pending Review", "12", "Needs Attention")
-    with col3: st.metric("Flagged Items", "3", delta=None)
-    with col4: st.metric("AI Confidence", "94%", "High Accuracy")
-
-    st.markdown("### Progress: SoundThinking SIG 2026")
-    st.progress(65)
-    st.divider()
+# --- PAGE 1: EXECUTIVE DASHBOARD ---
+if page == "Executive Dashboard":
+    st.title("Executive Dashboard")
+    st.markdown("Welcome back, **Cody**. Here is your compliance posture for today.")
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    st.subheader("Latest Questionnaire Items")
-    data = {
-        "Q-ID": ["3.1", "3.2", "4.5", "5.1", "5.2"],
-        "Category": ["Access Control", "Access Control", "Data Encryption", "Incident Mgmt", "Incident Mgmt"],
-        "Question": ["Do you use MFA?", "Is MFA enforced for all users?", "Is data encrypted at rest?", "Do you have an IR Plan?", "Is the IR Plan tested?"],
-        "Status": ["Drafted", "Drafted", "Review Pending", "Approved", "Empty"],
-        "Confidence": ["High", "High", "Medium", "High", "-"]
+    # DYNAMIC METRICS
+    reg = load_registry()
+    files_count = len(reg)
+    
+    # Calculate "Pending" based on dummy logic for now
+    pending_tasks = 12 
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Security Posture", "Secure", "No Critical Flags")
+    with col2:
+        st.metric("Active Audits", "3", "+1 This Month")
+    with col3:
+        st.metric("KB Assets Indexed", f"{files_count}", "Live Documents")
+    with col4:
+        st.metric("Pending Tasks", f"{pending_tasks}", "-2 Since Yesterday", delta_color="inverse")
+
+    st.divider()
+
+    # CHARTS & ACTIVITY
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_left:
+        st.subheader("📊 Audit Readiness Status")
+        # Mock Data for Chart
+        chart_data = pd.DataFrame({
+            'Status': ['Completed', 'In Review', 'Drafting', 'Not Started'],
+            'Items': [85, 12, 15, 8]
+        })
+        
+        c = alt.Chart(chart_data).mark_bar().encode(
+            x='Items',
+            y=alt.Y('Status', sort=None),
+            color=alt.Color('Status', scale=alt.Scale(scheme='greens'))
+        ).properties(height=250)
+        
+        st.altair_chart(c, use_container_width=True)
+
+    with col_right:
+        st.subheader("⚡ Live Activity Feed")
+        if os.path.exists(AUDIT_LOG_FILE):
+            df_log = pd.read_csv(AUDIT_LOG_FILE).tail(5).sort_values(by="Timestamp", ascending=False)
+            for index, row in df_log.iterrows():
+                icon = "🤖" if row['User'] == "System" else "👤"
+                st.markdown(f"**{icon} {row['Action']}**")
+                st.caption(f"{row['Details']} • {row['Timestamp']}")
+                st.markdown("---")
+        else:
+            st.info("No recent activity.")
+
+    # REQUESTS TABLE
+    st.subheader("📋 Priority Action Items")
+    request_data = {
+        "Control ID": ["CC-1.4", "CC-2.1", "CC-3.5", "CC-6.1", "CC-8.2"],
+        "Description": ["Board of Directors Review", "User Access Reviews", "Change Management Tickets", "Vulnerability Scans", "Incident Response Test"],
+        "Status": ["In Progress", "Review Pending", "Approved", "Action Required", "Approved"],
+        "Owner": ["Cody Keller", "AI Agent", "Jane Doe", "Cody Keller", "SecOps"]
     }
-    st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True, column_config={"Status": st.column_config.SelectboxColumn("Status", width="small", options=["Approved", "Drafted", "Review Pending", "Empty"], required=True)})
+    df_requests = pd.DataFrame(request_data)
+    
+    st.dataframe(
+        df_requests,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                width="small",
+                options=["Approved", "In Progress", "Review Pending", "Action Required"],
+                required=True,
+            ),
+             "Control ID": st.column_config.TextColumn(
+                "Control ID",
+                width="small"
+            ),
+        }
+    )
 
 # --- PAGE 2: PROJECTS ---
 elif page == "My Projects":
-    st.markdown('<div class="main-header">Active Questionnaires</div>', unsafe_allow_html=True)
+    st.title("Active Questionnaires")
     projects = pd.DataFrame({
         "Project Name": ["SoundThinking SIG 2026", "Internal ISO Audit", "Vendor A - CAIQ Lite"],
         "Due Date": ["Feb 28, 2026", "Mar 15, 2026", "Jan 10, 2026"],
@@ -182,7 +261,7 @@ elif page == "My Projects":
 
 # --- PAGE 3: AI AGENT ---
 elif page == "Questionnaire Agent":
-    st.markdown('<div class="main-header">⚡ Vendor Response Agent</div>', unsafe_allow_html=True)
+    st.title("⚡ Vendor Response Agent")
     if len(st.session_state.messages) > 0:
         col_export, _ = st.columns([1, 5])
         with col_export:
@@ -206,9 +285,7 @@ elif page == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
-                        if evidence and evidence != "No Source": 
-                            with st.expander("🔍 Verified Source"): 
-                                st.markdown(evidence)
+                        if evidence and evidence != "No Source": with st.expander("🔍 Verified Source"): st.markdown(evidence)
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
                     else: st.error("No response generated.")
@@ -216,10 +293,9 @@ elif page == "Questionnaire Agent":
 
 # --- PAGE 4: KNOWLEDGE BASE ---
 elif page == "Knowledge Base":
-    st.markdown('<div class="main-header">📚 Knowledge Base</div>', unsafe_allow_html=True)
+    st.title("📚 Knowledge Base")
     st.write("Manage security policies. Changes here automatically update the AI.")
 
-    # UPLOAD SECTION
     with st.expander("📤 Upload New Documents", expanded=False):
         uploaded_files = st.file_uploader("Select Files (PDF, DOCX, XLSX)", accept_multiple_files=True)
         if uploaded_files:
@@ -257,7 +333,6 @@ elif page == "Knowledge Base":
                     st.rerun()
                 except Exception as e: st.error(f"Failed: {e}")
 
-    # FILE LIST
     st.divider()
     st.subheader("🗄️ Indexed Documents")
     registry = load_registry()
@@ -266,7 +341,6 @@ elif page == "Knowledge Base":
         if files:
             for f in files:
                 meta = registry.get(f, {"description": "No description", "upload_date": "Unknown"})
-                
                 with st.container():
                     c1, c2, c3, c4, c5 = st.columns([0.5, 2, 3, 1.5, 1])
                     with c1: st.markdown("📄")
@@ -274,7 +348,6 @@ elif page == "Knowledge Base":
                         st.markdown(f"**{f}**")
                         st.caption(f"📅 {meta['upload_date']}")
                     with c3:
-                        # EDITABLE DESCRIPTION
                         new_desc = st.text_input("Description", value=meta['description'], key=f"edit_{f}", label_visibility="collapsed")
                     with c4:
                         if new_desc != meta['description']:
@@ -294,8 +367,7 @@ elif page == "Knowledge Base":
 
 # --- PAGE 5: SETTINGS ---
 elif page == "Settings":
-    st.markdown('<div class="main-header">⚙️ Settings</div>', unsafe_allow_html=True)
-    
+    st.title("⚙️ Settings")
     tab1, tab2, tab3 = st.tabs(["Appearance", "Audit Log", "User Profile"])
     
     with tab1:
