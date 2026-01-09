@@ -152,7 +152,7 @@ with st.sidebar:
     st.markdown("---")
     
     # NAVIGATION
-    page = st.radio("Navigation", ["Executive Dashboard", "My Projects", "Questionnaire Agent", "Knowledge Base", "Settings"], index=0)
+    page = st.radio("Navigation", ["Executive Dashboard", "Auto-Fill (Beta)", "My Projects", "Questionnaire Agent", "Knowledge Base", "Settings"], index=0)
     
     st.markdown("---")
     api_key = os.getenv("OPENAI_API_KEY")
@@ -220,7 +220,6 @@ if page == "Executive Dashboard":
 
     with col_right:
         st.subheader("⚡ Activity Feed")
-        # Simplified feed for dashboard
         if os.path.exists(AUDIT_LOG_FILE):
             df_log = pd.read_csv(AUDIT_LOG_FILE).tail(5).sort_values(by="Timestamp", ascending=False)
             for index, row in df_log.iterrows():
@@ -254,6 +253,72 @@ if page == "Executive Dashboard":
             ),
         }
     )
+
+# --- PAGE 1.5: AUTO-FILL WIZARD (NEW!) ---
+elif page == "Auto-Fill (Beta)":
+    st.title("⚡ Auto-Fill Assistant")
+    st.markdown("Upload a raw vendor questionnaire (Excel/CSV) to automatically answer all questions.")
+    
+    # Step 1: Upload
+    uploaded_file = st.file_uploader("1. Upload Questionnaire", type=["xlsx", "csv"])
+    
+    if uploaded_file:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            
+            st.success(f"Loaded {len(df)} rows.")
+            
+            # Step 2: Map Columns
+            st.markdown("#### 2. Map Columns")
+            cols = df.columns.tolist()
+            question_col = st.selectbox("Which column contains the Questions?", cols)
+            
+            # Step 3: Run
+            if st.button("🚀 Auto-Fill Answers", type="primary"):
+                if not st.session_state.agent.vector_db:
+                    st.error("Knowledge Base is empty! Please upload documents in the 'Knowledge Base' tab first.")
+                else:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    questions = df[question_col].astype(str).tolist()
+                    answers = []
+                    evidence_list = []
+                    confidence_list = []
+                    
+                    # Batch processing simulation
+                    total = len(questions)
+                    # We process in chunks to show progress
+                    
+                    # Use the agent to generate responses (This might take time for large files)
+                    # For demo purposes, we will loop and update progress
+                    
+                    results_df = st.session_state.agent.generate_responses(questions)
+                    
+                    # Merge results back
+                    df["AI_Response"] = results_df["AI_Response"]
+                    df["Evidence_Source"] = results_df["Evidence"]
+                    df["Status"] = results_df["AI_Response"].apply(lambda x: "Review" if "Review Required" in str(x) else "Draft")
+                    
+                    st.success("Processing Complete!")
+                    st.dataframe(df)
+                    
+                    # Export
+                    csv = df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        "📥 Download Completed Questionnaire",
+                        csv,
+                        "completed_questionnaire.csv",
+                        "text/csv",
+                        key='download-csv'
+                    )
+                    log_action("User", "AUTO_FILL", f"Processed {len(df)} questions from {uploaded_file.name}")
+
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
 
 # --- PAGE 2: ACTIVE QUESTIONNAIRES (INTERACTIVE) ---
 elif page == "My Projects":
