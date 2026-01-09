@@ -206,7 +206,9 @@ elif page == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
-                        if evidence and evidence != "No Source": with st.expander("🔍 Verified Source"): st.markdown(evidence)
+                        if evidence and evidence != "No Source": 
+                            with st.expander("🔍 Verified Source"): 
+                                st.markdown(evidence)
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
                     else: st.error("No response generated.")
