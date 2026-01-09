@@ -76,8 +76,9 @@ st.set_page_config(
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Pro (Default)"
 
-# GENERIC USER PROFILE (Privacy Update)
-if "user_profile" not in st.session_state:
+# GENERIC USER PROFILE (Privacy Update + Migration Fix)
+# Check if profile exists AND if it has the new keys. If not, reset it.
+if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
         "last_name": "Smith",
@@ -140,14 +141,17 @@ def show_header(title):
         
     with col_profile:
         # Create a simplified "Initials" avatar
-        initials = f"{st.session_state.user_profile['first_name'][0]}{st.session_state.user_profile['last_name'][0]}"
+        # Added safety check for keys just in case
+        fname = st.session_state.user_profile.get('first_name', 'U')
+        lname = st.session_state.user_profile.get('last_name', 'U')
+        initials = f"{fname[0]}{lname[0]}"
         
         # Popover Menu
         with st.popover(f"👤 {initials}", use_container_width=True):
-            st.markdown(f"**{st.session_state.user_profile['first_name']} {st.session_state.user_profile['last_name']}**")
-            st.caption(st.session_state.user_profile['title'])
+            st.markdown(f"**{fname} {lname}**")
+            st.caption(st.session_state.user_profile.get('title', 'User'))
             st.markdown("---")
-            st.caption(f"Role: {st.session_state.user_profile['role']}")
+            st.caption(f"Role: {st.session_state.user_profile.get('role', 'User')}")
             
             if st.button("Log Out", key="logout_top", use_container_width=True):
                 st.session_state.logged_in = False
@@ -207,7 +211,7 @@ if "agent" not in st.session_state:
 # --- PAGE 1: EXECUTIVE DASHBOARD ---
 if page == "Executive Dashboard":
     show_header("Executive Dashboard")
-    st.markdown(f"Welcome back, **{st.session_state.user_profile['first_name']}**. Here is your compliance posture for today.")
+    st.markdown(f"Welcome back, **{st.session_state.user_profile.get('first_name', 'User')}**. Here is your compliance posture for today.")
     st.markdown("<br>", unsafe_allow_html=True)
     
     # DYNAMIC METRICS
@@ -399,7 +403,6 @@ elif page == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
-                        # Corrected Logic Split
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Verified Source"): 
                                 st.markdown(evidence)
@@ -435,7 +438,7 @@ elif page == "Knowledge Base":
                     registry[uploaded_file.name] = {
                         "description": file_meta[uploaded_file.name],
                         "upload_date": datetime.now().strftime("%Y-%m-%d"),
-                        "uploaded_by": st.session_state.user_profile["last_name"]
+                        "uploaded_by": st.session_state.user_profile.get("last_name", "Admin")
                     }
                     progress_bar.progress((i + 1) / len(uploaded_files) * 0.5)
                 
@@ -511,13 +514,13 @@ elif page == "Settings":
         st.markdown("### 👤 User Profile")
         c1, c2 = st.columns(2)
         with c1:
-            new_fname = st.text_input("First Name", value=st.session_state.user_profile["first_name"])
-            new_lname = st.text_input("Last Name", value=st.session_state.user_profile["last_name"])
-            new_email = st.text_input("Email", value=st.session_state.user_profile["email"])
+            new_fname = st.text_input("First Name", value=st.session_state.user_profile.get("first_name", ""))
+            new_lname = st.text_input("Last Name", value=st.session_state.user_profile.get("last_name", ""))
+            new_email = st.text_input("Email", value=st.session_state.user_profile.get("email", ""))
         with c2:
-            new_title = st.text_input("Job Title", value=st.session_state.user_profile["title"])
-            new_phone = st.text_input("Phone Number", value=st.session_state.user_profile["phone"])
-            new_role = st.text_input("System Role", value=st.session_state.user_profile["role"], disabled=True)
+            new_title = st.text_input("Job Title", value=st.session_state.user_profile.get("title", ""))
+            new_phone = st.text_input("Phone Number", value=st.session_state.user_profile.get("phone", ""))
+            new_role = st.text_input("System Role", value=st.session_state.user_profile.get("role", "Viewer"), disabled=True)
             
         if st.button("Update Profile"):
             st.session_state.user_profile.update({
