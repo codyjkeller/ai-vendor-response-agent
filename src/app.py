@@ -85,23 +85,36 @@ def get_theme_css(mode):
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     """
+    
+    # CSS to fix the "Whited Out" button in Dark Sidebar
+    sidebar_btn_css = """
+    section[data-testid="stSidebar"] button {
+        background-color: #F3F4F6 !important;
+        color: #111827 !important;
+        font-weight: 600 !important;
+        border: none !important;
+    }
+    section[data-testid="stSidebar"] button:hover {
+        background-color: #E5E7EB !important;
+        color: #000000 !important;
+    }
+    """
+
     if mode == "Pro (Default)":
-        return base_css + """
+        return base_css + sidebar_btn_css + """
         section[data-testid="stSidebar"] { background-color: #111827; color: white; }
         section[data-testid="stSidebar"] * { color: #E5E7EB !important; }
         .stApp { background-color: #F9FAFB; color: #111827; }
         div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .metric-label { font-size: 0.875rem; color: #6B7280; }
-        .metric-value { font-size: 1.5rem; font-weight: 600; color: #111827; }
         """
     elif mode == "Dark Mode":
-        return base_css + """
+        return base_css + sidebar_btn_css + """
         section[data-testid="stSidebar"] { background-color: #1f1f1f; }
         .stApp { background-color: #0E1117; color: #E0E0E0; }
         div[data-testid="stMetric"] { background-color: #262730; border: 1px solid #444; border-radius: 8px; padding: 15px; }
         """
     elif mode == "Light Mode":
-        return base_css + """
+        return base_css + sidebar_btn_css + """
         section[data-testid="stSidebar"] { background-color: #F0F2F6; }
         .stApp { background-color: #FFFFFF; color: #333; }
         """
@@ -146,6 +159,7 @@ with st.sidebar:
     status_icon = "🟢" if api_key else "🟡"
     st.caption(f"{status_icon} AI Engine: Online")
     
+    # The CSS above fixes this button's contrast
     if st.button("Log Out", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
@@ -173,8 +187,6 @@ if page == "Executive Dashboard":
     # DYNAMIC METRICS
     reg = load_registry()
     files_count = len(reg)
-    
-    # Calculate "Pending" based on dummy logic for now
     pending_tasks = 12 
     
     col1, col2, col3, col4 = st.columns(4)
@@ -194,7 +206,6 @@ if page == "Executive Dashboard":
     
     with col_left:
         st.subheader("📊 Audit Readiness Status")
-        # Mock Data for Chart
         chart_data = pd.DataFrame({
             'Status': ['Completed', 'In Review', 'Drafting', 'Not Started'],
             'Items': [85, 12, 15, 8]
@@ -205,17 +216,17 @@ if page == "Executive Dashboard":
             y=alt.Y('Status', sort=None),
             color=alt.Color('Status', scale=alt.Scale(scheme='greens'))
         ).properties(height=250)
-        
         st.altair_chart(c, use_container_width=True)
 
     with col_right:
-        st.subheader("⚡ Live Activity Feed")
+        st.subheader("⚡ Activity Feed")
+        # Simplified feed for dashboard
         if os.path.exists(AUDIT_LOG_FILE):
             df_log = pd.read_csv(AUDIT_LOG_FILE).tail(5).sort_values(by="Timestamp", ascending=False)
             for index, row in df_log.iterrows():
                 icon = "🤖" if row['User'] == "System" else "👤"
                 st.markdown(f"**{icon} {row['Action']}**")
-                st.caption(f"{row['Details']} • {row['Timestamp']}")
+                st.caption(f"{row['Details']}")
                 st.markdown("---")
         else:
             st.info("No recent activity.")
@@ -241,23 +252,53 @@ if page == "Executive Dashboard":
                 options=["Approved", "In Progress", "Review Pending", "Action Required"],
                 required=True,
             ),
-             "Control ID": st.column_config.TextColumn(
-                "Control ID",
-                width="small"
-            ),
         }
     )
 
-# --- PAGE 2: PROJECTS ---
+# --- PAGE 2: ACTIVE QUESTIONNAIRES (INTERACTIVE) ---
 elif page == "My Projects":
     st.title("Active Questionnaires")
+    st.info("Select a project below to view details and manage status.")
+    
     projects = pd.DataFrame({
         "Project Name": ["SoundThinking SIG 2026", "Internal ISO Audit", "Vendor A - CAIQ Lite"],
         "Due Date": ["Feb 28, 2026", "Mar 15, 2026", "Jan 10, 2026"],
         "Progress": [65, 20, 90],
         "Type": ["SIG Core", "ISO 27001", "CAIQ"]
     })
-    st.dataframe(projects, use_container_width=True, column_config={"Progress": st.column_config.ProgressColumn("Completion", format="%d%%", min_value=0, max_value=100)}, hide_index=True)
+    
+    # 1. Interactive Table
+    event = st.dataframe(
+        projects,
+        use_container_width=True,
+        hide_index=True,
+        selection_mode="single-row",
+        on_select="rerun",
+        column_config={
+            "Progress": st.column_config.ProgressColumn("Completion", format="%d%%", min_value=0, max_value=100)
+        }
+    )
+    
+    # 2. Drill-Down View (triggered on selection)
+    if len(event.selection.rows) > 0:
+        selected_index = event.selection.rows[0]
+        selected_project = projects.iloc[selected_index]
+        
+        st.divider()
+        st.subheader(f"📂 Managing: {selected_project['Project Name']}")
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"**Due Date:** {selected_project['Due Date']}")
+            st.button("📅 Change Deadline", key="btn_date")
+        with c2:
+            st.markdown(f"**Type:** {selected_project['Type']}")
+            st.button("📤 Export Draft", key="btn_export")
+        with c3:
+            st.markdown(f"**Status:** {selected_project['Progress']}% Complete")
+            if st.button("✅ Mark Complete", key="btn_complete", type="primary"):
+                st.balloons()
+                st.success("Project marked as complete!")
 
 # --- PAGE 3: AI AGENT ---
 elif page == "Questionnaire Agent":
@@ -286,11 +327,9 @@ elif page == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
-                        # FIXED: Split logic to multi-line for valid Python syntax
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Verified Source"): 
                                 st.markdown(evidence)
-                        
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
                     else: st.error("No response generated.")
@@ -370,29 +409,39 @@ elif page == "Knowledge Base":
                     st.divider()
         else: st.info("No documents found.")
 
-# --- PAGE 5: SETTINGS ---
+# --- PAGE 5: SETTINGS (Standardized Text + Code Logs) ---
 elif page == "Settings":
     st.title("⚙️ Settings")
     tab1, tab2, tab3 = st.tabs(["Appearance", "Audit Log", "User Profile"])
     
     with tab1:
-        st.subheader("🎨 Interface Theme")
+        st.markdown("### 🎨 Interface Theme") # Larger Text
         selected_theme = st.radio("Choose Theme", ["Pro (Default)", "Dark Mode", "Light Mode"], index=["Pro (Default)", "Dark Mode", "Light Mode"].index(st.session_state.theme_mode))
         if selected_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = selected_theme
             st.rerun()
             
     with tab2:
-        st.subheader("📜 System Audit Logs")
+        st.markdown("### 📜 System Audit Logs") # Larger Text
+        st.caption("Immutable record of system actions.")
+        
         if os.path.exists(AUDIT_LOG_FILE):
+            # Read CSV and format as a "Code Block" stream
             df_log = pd.read_csv(AUDIT_LOG_FILE).sort_values(by="Timestamp", ascending=False)
-            st.dataframe(df_log, use_container_width=True, height=400)
+            
+            # Create a string representation for the 'terminal' look
+            log_text = ""
+            for index, row in df_log.iterrows():
+                log_text += f"[{row['Timestamp']}] {row['User']} performed {row['Action']}: {row['Details']}\n"
+            
+            st.code(log_text, language="log")
+            
             st.download_button("📥 Download Logs (CSV)", df_log.to_csv(index=False).encode('utf-8'), "audit_logs.csv", "text/csv")
         else:
             st.info("No logs recorded yet.")
             
     with tab3:
-        st.subheader("👤 User Profile")
+        st.markdown("### 👤 User Profile") # Larger Text
         col1, col2 = st.columns(2)
         with col1:
             new_name = st.text_input("Full Name", value=st.session_state.user_profile["name"])
