@@ -54,17 +54,20 @@ def load_answer_bank():
 
 def save_to_answer_bank(question, answer, user, product, subsidiary):
     bank = load_answer_bank()
-    bank.append({
-        "question": question,
-        "answer": answer,
-        "product": product,
-        "subsidiary": subsidiary,
-        "verified_by": user,
-        "date": datetime.now().strftime("%Y-%m-%d")
-    })
-    with open(ANSWER_BANK_FILE, "w") as f:
-        json.dump(bank, f, indent=4)
-    log_action(user, "VERIFY_ANSWER", f"Added Q&A for {product}")
+    # Check for duplicates before adding
+    if not any(entry['question'] == question for entry in bank):
+        bank.append({
+            "question": question,
+            "answer": answer,
+            "product": product,
+            "subsidiary": subsidiary,
+            "verified_by": user,
+            "date": datetime.now().strftime("%Y-%m-%d")
+        })
+        with open(ANSWER_BANK_FILE, "w") as f:
+            json.dump(bank, f, indent=4)
+        return True
+    return False
 
 def update_file_meta(filename, new_desc):
     reg = load_registry()
@@ -100,6 +103,8 @@ if "theme_mode" not in st.session_state:
 # INITIALIZE SESSION STATE
 if "auth_stage" not in st.session_state:
     st.session_state.auth_stage = "login"
+if "page_selection" not in st.session_state:
+    st.session_state.page_selection = "Executive Dashboard"
 if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
@@ -241,17 +246,36 @@ with st.sidebar:
     st.caption("Enterprise Compliance")
     st.markdown("---")
     
-    # POP-OUT MENU (Selectbox)
-    page = st.selectbox("Navigation", [
-        "Executive Dashboard", 
-        "Auto-Fill (Beta)", 
-        "Answer Bank", 
-        "Gap Analysis",
-        "My Projects", 
-        "Questionnaire Agent", 
-        "Knowledge Base", 
-        "Settings"
-    ])
+    # POP-OUT MENU (Selectbox) - Using Session State to control navigation
+    page = st.selectbox(
+        "Navigation", 
+        [
+            "Executive Dashboard", 
+            "Auto-Fill (Beta)", 
+            "Answer Bank", 
+            "Gap Analysis",
+            "My Projects", 
+            "Questionnaire Agent", 
+            "Knowledge Base", 
+            "Settings"
+        ],
+        index=[
+            "Executive Dashboard", 
+            "Auto-Fill (Beta)", 
+            "Answer Bank", 
+            "Gap Analysis",
+            "My Projects", 
+            "Questionnaire Agent", 
+            "Knowledge Base", 
+            "Settings"
+        ].index(st.session_state.page_selection),
+        key="nav_selection"
+    )
+    
+    # Update manual selection to session state
+    if page != st.session_state.page_selection:
+        st.session_state.page_selection = page
+        st.rerun()
     
     st.markdown("---")
     api_key = os.getenv("OPENAI_API_KEY")
@@ -273,7 +297,7 @@ if "agent" not in st.session_state:
     st.session_state.agent = VendorResponseAgent()
 
 # --- PAGE 1: EXECUTIVE DASHBOARD ---
-if page == "Executive Dashboard":
+if st.session_state.page_selection == "Executive Dashboard":
     show_header("Executive Dashboard")
     st.markdown(f"Welcome back, **{st.session_state.user_profile.get('first_name', 'User')}**. Here is your compliance posture for today.")
     st.markdown("<br>", unsafe_allow_html=True)
@@ -287,6 +311,26 @@ if page == "Executive Dashboard":
     with col2: st.metric("Active Audits", "3", "+1 This Month")
     with col3: st.metric("KB Assets Indexed", f"{files_count}", "Live Documents")
     with col4: st.metric("Pending Tasks", f"{pending_tasks}", "-2 Since Yesterday", delta_color="inverse")
+
+    # --- QUICK ACTIONS (The "Flow" Connector) ---
+    st.markdown("### 🚀 Quick Actions")
+    qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
+    with qa_col1:
+        if st.button("📄 Start Auto-Fill", use_container_width=True):
+            st.session_state.page_selection = "Auto-Fill (Beta)"
+            st.rerun()
+    with qa_col2:
+        if st.button("📤 Upload Policy", use_container_width=True):
+            st.session_state.page_selection = "Knowledge Base"
+            st.rerun()
+    with qa_col3:
+        if st.button("🔍 Run Gap Analysis", use_container_width=True):
+            st.session_state.page_selection = "Gap Analysis"
+            st.rerun()
+    with qa_col4:
+        if st.button("🧠 Search Knowledge", use_container_width=True):
+            st.session_state.page_selection = "Questionnaire Agent"
+            st.rerun()
 
     st.divider()
 
@@ -309,8 +353,8 @@ if page == "Executive Dashboard":
         else:
             st.info("No recent activity.")
 
-# --- PAGE 2: AUTO-FILL WIZARD ---
-elif page == "Auto-Fill (Beta)":
+# --- PAGE 2: AUTO-FILL WIZARD (INTEGRATED) ---
+elif st.session_state.page_selection == "Auto-Fill (Beta)":
     show_header("Auto-Fill Assistant")
     st.markdown("Upload a raw vendor questionnaire (Excel/CSV) to automatically answer all questions.")
     
@@ -334,20 +378,44 @@ elif page == "Auto-Fill (Beta)":
                     with st.spinner("Analyzing questions against Knowledge Base..."):
                         results_df = st.session_state.agent.generate_responses(questions)
                     
-                    df["AI_Response"] = results_df["AI_Response"]
-                    df["Evidence_Source"] = results_df["Evidence"]
-                    df["Status"] = results_df["AI_Response"].apply(lambda x: "Review" if "Review Required" in str(x) else "Draft")
-                    
-                    st.success("Processing Complete!")
-                    st.dataframe(df)
-                    
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Download Completed Questionnaire", csv, "completed_questionnaire.csv", "text/csv", key='download-csv')
+                    # Store results in session state so they persist
+                    st.session_state.auto_fill_results = results_df
+                    st.session_state.auto_fill_df = df
+                    st.session_state.auto_fill_complete = True
                     log_action("User", "AUTO_FILL", f"Processed {len(df)} questions from {uploaded_file.name}")
+
         except Exception as e: st.error(f"Error reading file: {e}")
 
+    # --- RESULT REVIEW & LEARNING LOOP ---
+    if st.session_state.get("auto_fill_complete", False):
+        st.divider()
+        st.subheader("3. Review & Train")
+        st.info("Review the AI answers below. Click 'Add to Bank' to save high-quality answers for future use.")
+        
+        results_df = st.session_state.auto_fill_results
+        df = st.session_state.auto_fill_df
+        
+        # Merge logic
+        df["AI_Response"] = results_df["AI_Response"]
+        df["Evidence_Source"] = results_df["Evidence"]
+        
+        # Display as interactive table
+        for index, row in df.iterrows():
+            with st.expander(f"Q: {row[question_col][:100]}...", expanded=False):
+                st.write(f"**Answer:** {row['AI_Response']}")
+                st.caption(f"**Source:** {row['Evidence_Source']}")
+                
+                # THE FEEDBACK LOOP BUTTON
+                if st.button(f"💾 Save to Answer Bank", key=f"save_bank_{index}"):
+                    save_to_answer_bank(row[question_col], row['AI_Response'], st.session_state.user_profile["last_name"], "Auto-Fill", "General")
+                    st.toast("Saved to Golden Record!")
+
+        st.divider()
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Final CSV", csv, "completed_questionnaire.csv", "text/csv")
+
 # --- PAGE 3: ANSWER BANK ---
-elif page == "Answer Bank":
+elif st.session_state.page_selection == "Answer Bank":
     show_header("Answer Bank")
     st.info("Verified 'Golden Record' answers. The AI checks here first before searching documents.")
     
@@ -405,7 +473,7 @@ elif page == "Answer Bank":
                 st.rerun()
 
 # --- PAGE 4: GAP ANALYSIS ---
-elif page == "Gap Analysis":
+elif st.session_state.page_selection == "Gap Analysis":
     show_header("Strategic Gap Analysis")
     st.markdown("Scan your knowledge base against common compliance frameworks.")
     
@@ -429,7 +497,7 @@ elif page == "Gap Analysis":
             st.dataframe(pd.DataFrame(issues), use_container_width=True, hide_index=True)
 
 # --- PAGE 5: ACTIVE QUESTIONNAIRES ---
-elif page == "My Projects":
+elif st.session_state.page_selection == "My Projects":
     show_header("Active Questionnaires")
     st.info("Select a project below to view details and manage status.")
     
@@ -461,7 +529,7 @@ elif page == "My Projects":
                 st.success("Project marked as complete!")
 
 # --- PAGE 6: AI AGENT ---
-elif page == "Questionnaire Agent":
+elif st.session_state.page_selection == "Questionnaire Agent":
     show_header("Vendor Response Agent")
     
     with st.expander("ℹ️ How to use this Agent"):
@@ -509,7 +577,7 @@ elif page == "Questionnaire Agent":
                 except Exception as e: st.error(f"Error: {e}")
 
 # --- PAGE 7: KNOWLEDGE BASE ---
-elif page == "Knowledge Base":
+elif st.session_state.page_selection == "Knowledge Base":
     show_header("Knowledge Base")
     st.write("Manage security policies. Changes here automatically update the AI.")
 
@@ -588,7 +656,7 @@ elif page == "Knowledge Base":
         else: st.info("No documents found.")
 
 # --- PAGE 8: SETTINGS ---
-elif page == "Settings":
+elif st.session_state.page_selection == "Settings":
     show_header("Settings")
     tab1, tab2, tab3, tab4 = st.tabs(["Appearance", "Audit Log", "User Profile", "Roles & Permissions"])
     
