@@ -66,17 +66,27 @@ def delete_file(filename):
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="AuditFlow - Secure Access",
+    page_title="AuditFlow",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- THEME ENGINE ---
+# --- THEME & SESSION STATE ---
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Pro (Default)"
+
+# GENERIC USER PROFILE (Privacy Update)
 if "user_profile" not in st.session_state:
-    st.session_state.user_profile = {"name": "Cody Keller", "email": "cody@auditflow.io", "role": "CISO"}
+    st.session_state.user_profile = {
+        "first_name": "John",
+        "last_name": "Smith",
+        "email": "john.smith@auditflow.io",
+        "phone": "555-0199",
+        "title": "Sr. Security Analyst",
+        "role": "Administrator"
+    }
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -86,7 +96,6 @@ def get_theme_css(mode):
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     """
     
-    # CSS to fix the "Whited Out" button in Dark Sidebar
     sidebar_btn_css = """
     section[data-testid="stSidebar"] button {
         background-color: #F3F4F6 !important;
@@ -122,6 +131,28 @@ def get_theme_css(mode):
 
 st.markdown(f"<style>{get_theme_css(st.session_state.theme_mode)}</style>", unsafe_allow_html=True)
 
+# --- CUSTOM HEADER FUNCTION (Top Right Profile) ---
+def show_header(title):
+    col_title, col_profile = st.columns([6, 1])
+    
+    with col_title:
+        st.markdown(f"# {title}")
+        
+    with col_profile:
+        # Create a simplified "Initials" avatar
+        initials = f"{st.session_state.user_profile['first_name'][0]}{st.session_state.user_profile['last_name'][0]}"
+        
+        # Popover Menu
+        with st.popover(f"👤 {initials}", use_container_width=True):
+            st.markdown(f"**{st.session_state.user_profile['first_name']} {st.session_state.user_profile['last_name']}**")
+            st.caption(st.session_state.user_profile['title'])
+            st.markdown("---")
+            st.caption(f"Role: {st.session_state.user_profile['role']}")
+            
+            if st.button("Log Out", key="logout_top", use_container_width=True):
+                st.session_state.logged_in = False
+                st.rerun()
+
 # --- LOGIN SCREEN LOGIC ---
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -131,7 +162,7 @@ if not st.session_state.logged_in:
         st.info("Identity Provider: SoundThinking SSO")
         
         with st.form("login_form"):
-            st.text_input("Username", value="cody.keller@auditflow.io")
+            st.text_input("Username", value="john.smith@auditflow.io")
             st.text_input("Password", type="password", value="password123")
             submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
             
@@ -141,7 +172,7 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     log_action("System", "USER_LOGIN", "User logged in successfully")
                     st.rerun()
-    st.stop() # Stop execution here if not logged in
+    st.stop() 
 
 # --- MAIN APP START ---
 
@@ -158,11 +189,6 @@ with st.sidebar:
     api_key = os.getenv("OPENAI_API_KEY")
     status_icon = "🟢" if api_key else "🟡"
     st.caption(f"{status_icon} AI Engine: Online")
-    
-    # The CSS above fixes this button's contrast
-    if st.button("Log Out", use_container_width=True):
-        st.session_state.logged_in = False
-        st.rerun()
 
 # --- INITIALIZATION ---
 if not os.path.exists("./chroma_db") and os.path.exists("./data"):
@@ -180,8 +206,8 @@ if "agent" not in st.session_state:
 
 # --- PAGE 1: EXECUTIVE DASHBOARD ---
 if page == "Executive Dashboard":
-    st.title("Executive Dashboard")
-    st.markdown("Welcome back, **Cody**. Here is your compliance posture for today.")
+    show_header("Executive Dashboard")
+    st.markdown(f"Welcome back, **{st.session_state.user_profile['first_name']}**. Here is your compliance posture for today.")
     st.markdown("<br>", unsafe_allow_html=True)
     
     # DYNAMIC METRICS
@@ -236,7 +262,7 @@ if page == "Executive Dashboard":
         "Control ID": ["CC-1.4", "CC-2.1", "CC-3.5", "CC-6.1", "CC-8.2"],
         "Description": ["Board of Directors Review", "User Access Reviews", "Change Management Tickets", "Vulnerability Scans", "Incident Response Test"],
         "Status": ["In Progress", "Review Pending", "Approved", "Action Required", "Approved"],
-        "Owner": ["Cody Keller", "AI Agent", "Jane Doe", "Cody Keller", "SecOps"]
+        "Owner": ["John Smith", "AI Agent", "Jane Doe", "John Smith", "SecOps"]
     }
     df_requests = pd.DataFrame(request_data)
     
@@ -254,12 +280,11 @@ if page == "Executive Dashboard":
         }
     )
 
-# --- PAGE 1.5: AUTO-FILL WIZARD (NEW!) ---
+# --- PAGE 1.5: AUTO-FILL WIZARD ---
 elif page == "Auto-Fill (Beta)":
-    st.title("⚡ Auto-Fill Assistant")
+    show_header("Auto-Fill Assistant")
     st.markdown("Upload a raw vendor questionnaire (Excel/CSV) to automatically answer all questions.")
     
-    # Step 1: Upload
     uploaded_file = st.file_uploader("1. Upload Questionnaire", type=["xlsx", "csv"])
     
     if uploaded_file:
@@ -271,34 +296,19 @@ elif page == "Auto-Fill (Beta)":
             
             st.success(f"Loaded {len(df)} rows.")
             
-            # Step 2: Map Columns
             st.markdown("#### 2. Map Columns")
             cols = df.columns.tolist()
             question_col = st.selectbox("Which column contains the Questions?", cols)
             
-            # Step 3: Run
             if st.button("🚀 Auto-Fill Answers", type="primary"):
                 if not st.session_state.agent.vector_db:
                     st.error("Knowledge Base is empty! Please upload documents in the 'Knowledge Base' tab first.")
                 else:
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
                     questions = df[question_col].astype(str).tolist()
-                    answers = []
-                    evidence_list = []
-                    confidence_list = []
                     
-                    # Batch processing simulation
-                    total = len(questions)
-                    # We process in chunks to show progress
+                    with st.spinner("Analyzing questions against Knowledge Base..."):
+                        results_df = st.session_state.agent.generate_responses(questions)
                     
-                    # Use the agent to generate responses (This might take time for large files)
-                    # For demo purposes, we will loop and update progress
-                    
-                    results_df = st.session_state.agent.generate_responses(questions)
-                    
-                    # Merge results back
                     df["AI_Response"] = results_df["AI_Response"]
                     df["Evidence_Source"] = results_df["Evidence"]
                     df["Status"] = results_df["AI_Response"].apply(lambda x: "Review" if "Review Required" in str(x) else "Draft")
@@ -306,7 +316,6 @@ elif page == "Auto-Fill (Beta)":
                     st.success("Processing Complete!")
                     st.dataframe(df)
                     
-                    # Export
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         "📥 Download Completed Questionnaire",
@@ -320,9 +329,9 @@ elif page == "Auto-Fill (Beta)":
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
-# --- PAGE 2: ACTIVE QUESTIONNAIRES (INTERACTIVE) ---
+# --- PAGE 2: ACTIVE QUESTIONNAIRES ---
 elif page == "My Projects":
-    st.title("Active Questionnaires")
+    show_header("Active Questionnaires")
     st.info("Select a project below to view details and manage status.")
     
     projects = pd.DataFrame({
@@ -332,7 +341,6 @@ elif page == "My Projects":
         "Type": ["SIG Core", "ISO 27001", "CAIQ"]
     })
     
-    # 1. Interactive Table
     event = st.dataframe(
         projects,
         use_container_width=True,
@@ -344,7 +352,6 @@ elif page == "My Projects":
         }
     )
     
-    # 2. Drill-Down View (triggered on selection)
     if len(event.selection.rows) > 0:
         selected_index = event.selection.rows[0]
         selected_project = projects.iloc[selected_index]
@@ -367,7 +374,7 @@ elif page == "My Projects":
 
 # --- PAGE 3: AI AGENT ---
 elif page == "Questionnaire Agent":
-    st.title("⚡ Vendor Response Agent")
+    show_header("Vendor Response Agent")
     if len(st.session_state.messages) > 0:
         col_export, _ = st.columns([1, 5])
         with col_export:
@@ -392,6 +399,7 @@ elif page == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
+                        # Corrected Logic Split
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Verified Source"): 
                                 st.markdown(evidence)
@@ -402,7 +410,7 @@ elif page == "Questionnaire Agent":
 
 # --- PAGE 4: KNOWLEDGE BASE ---
 elif page == "Knowledge Base":
-    st.title("📚 Knowledge Base")
+    show_header("Knowledge Base")
     st.write("Manage security policies. Changes here automatically update the AI.")
 
     with st.expander("📤 Upload New Documents", expanded=False):
@@ -427,7 +435,7 @@ elif page == "Knowledge Base":
                     registry[uploaded_file.name] = {
                         "description": file_meta[uploaded_file.name],
                         "upload_date": datetime.now().strftime("%Y-%m-%d"),
-                        "uploaded_by": st.session_state.user_profile["name"]
+                        "uploaded_by": st.session_state.user_profile["last_name"]
                     }
                     progress_bar.progress((i + 1) / len(uploaded_files) * 0.5)
                 
@@ -474,47 +482,59 @@ elif page == "Knowledge Base":
                     st.divider()
         else: st.info("No documents found.")
 
-# --- PAGE 5: SETTINGS (Standardized Text + Code Logs) ---
+# --- PAGE 5: SETTINGS ---
 elif page == "Settings":
-    st.title("⚙️ Settings")
-    tab1, tab2, tab3 = st.tabs(["Appearance", "Audit Log", "User Profile"])
+    show_header("Settings")
+    tab1, tab2, tab3, tab4 = st.tabs(["Appearance", "Audit Log", "User Profile", "Roles & Permissions"])
     
     with tab1:
-        st.markdown("### 🎨 Interface Theme") # Larger Text
+        st.markdown("### 🎨 Interface Theme")
         selected_theme = st.radio("Choose Theme", ["Pro (Default)", "Dark Mode", "Light Mode"], index=["Pro (Default)", "Dark Mode", "Light Mode"].index(st.session_state.theme_mode))
         if selected_theme != st.session_state.theme_mode:
             st.session_state.theme_mode = selected_theme
             st.rerun()
             
     with tab2:
-        st.markdown("### 📜 System Audit Logs") # Larger Text
+        st.markdown("### 📜 System Audit Logs")
         st.caption("Immutable record of system actions.")
-        
         if os.path.exists(AUDIT_LOG_FILE):
-            # Read CSV and format as a "Code Block" stream
             df_log = pd.read_csv(AUDIT_LOG_FILE).sort_values(by="Timestamp", ascending=False)
-            
-            # Create a string representation for the 'terminal' look
             log_text = ""
             for index, row in df_log.iterrows():
                 log_text += f"[{row['Timestamp']}] {row['User']} performed {row['Action']}: {row['Details']}\n"
-            
             st.code(log_text, language="log")
-            
             st.download_button("📥 Download Logs (CSV)", df_log.to_csv(index=False).encode('utf-8'), "audit_logs.csv", "text/csv")
         else:
             st.info("No logs recorded yet.")
             
     with tab3:
-        st.markdown("### 👤 User Profile") # Larger Text
-        col1, col2 = st.columns(2)
-        with col1:
-            new_name = st.text_input("Full Name", value=st.session_state.user_profile["name"])
-            new_email = st.text_input("Email Address", value=st.session_state.user_profile["email"])
-        with col2:
-            new_role = st.text_input("Role", value=st.session_state.user_profile["role"])
-            st.text_input("Organization", value="SoundThinking", disabled=True)
+        st.markdown("### 👤 User Profile")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_fname = st.text_input("First Name", value=st.session_state.user_profile["first_name"])
+            new_lname = st.text_input("Last Name", value=st.session_state.user_profile["last_name"])
+            new_email = st.text_input("Email", value=st.session_state.user_profile["email"])
+        with c2:
+            new_title = st.text_input("Job Title", value=st.session_state.user_profile["title"])
+            new_phone = st.text_input("Phone Number", value=st.session_state.user_profile["phone"])
+            new_role = st.text_input("System Role", value=st.session_state.user_profile["role"], disabled=True)
             
         if st.button("Update Profile"):
-            st.session_state.user_profile = {"name": new_name, "email": new_email, "role": new_role}
+            st.session_state.user_profile.update({
+                "first_name": new_fname, "last_name": new_lname, 
+                "email": new_email, "title": new_title, "phone": new_phone
+            })
             st.success("Profile Updated!")
+            st.rerun()
+
+    with tab4:
+        st.markdown("### 🔑 Role Management")
+        st.caption("Manage access levels for the organization.")
+        
+        roles_data = {
+            "Role": ["Administrator", "Analyst", "Auditor", "Viewer"],
+            "Write Access": [True, True, False, False],
+            "Delete Access": [True, False, False, False],
+            "AI Access": [True, True, True, False]
+        }
+        st.data_editor(pd.DataFrame(roles_data), num_rows="dynamic", use_container_width=True)
