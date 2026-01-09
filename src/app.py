@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import sys
-import shutil
 
 # --- Path Setup ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
