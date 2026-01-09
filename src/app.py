@@ -95,7 +95,9 @@ st.set_page_config(
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Pro (Default)"
 
-# GENERIC USER PROFILE (Privacy Update + Migration Fix)
+# INITIALIZE SESSION STATE
+if "auth_stage" not in st.session_state:
+    st.session_state.auth_stage = "login" # login, mfa, authenticated, forgot_password
 if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
@@ -106,23 +108,14 @@ if "user_profile" not in st.session_state or "first_name" not in st.session_stat
         "role": "Administrator"
     }
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
 def get_theme_css(mode):
     base_css = """
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
     /* Popover Menu Tightening */
-    div[data-testid="stPopoverBody"] > div {
-        padding-top: 10px !important;
-        padding-bottom: 10px !important;
-    }
-    div[data-testid="stPopoverBody"] hr {
-        margin-top: 10px !important;
-        margin-bottom: 10px !important;
-    }
+    div[data-testid="stPopoverBody"] > div { padding: 10px !important; }
+    div[data-testid="stPopoverBody"] hr { margin: 10px 0 !important; }
     """
     
     sidebar_btn_css = """
@@ -160,13 +153,11 @@ def get_theme_css(mode):
 
 st.markdown(f"<style>{get_theme_css(st.session_state.theme_mode)}</style>", unsafe_allow_html=True)
 
-# --- CUSTOM HEADER FUNCTION (Top Right Profile) ---
+# --- CUSTOM HEADER FUNCTION ---
 def show_header(title):
     col_title, col_profile = st.columns([6, 1])
-    
     with col_title:
         st.markdown(f"# {title}")
-        
     with col_profile:
         fname = st.session_state.user_profile.get('first_name', 'U')
         lname = st.session_state.user_profile.get('last_name', 'U')
@@ -176,31 +167,68 @@ def show_header(title):
             st.markdown(f"**{fname} {lname}**")
             st.caption(st.session_state.user_profile.get('title', 'User'))
             st.markdown("---")
-            st.caption(f"Role: {st.session_state.user_profile.get('role', 'User')}")
-            
             if st.button("Log Out", key="logout_top", use_container_width=True):
-                st.session_state.logged_in = False
+                st.session_state.auth_stage = "login"
                 st.rerun()
 
-# --- LOGIN SCREEN LOGIC ---
-if not st.session_state.logged_in:
+# --- AUTHENTICATION FLOW ---
+if st.session_state.auth_stage != "authenticated":
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown("## 🛡️ AuditFlow Secure Login")
-        st.info("Identity Provider: SoundThinking SSO")
         
-        with st.form("login_form"):
-            st.text_input("Username", value="john.smith@auditflow.io")
-            st.text_input("Password", type="password", value="password123")
-            submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+        # 1. LOGIN SCREEN
+        if st.session_state.auth_stage == "login":
+            st.markdown("## 🛡️ AuditFlow Secure Login")
+            st.info("Identity Provider: SoundThinking SSO")
             
-            if submitted:
-                with st.spinner("Authenticating..."):
-                    time.sleep(1) # Fake delay for realism
-                    st.session_state.logged_in = True
-                    log_action("System", "USER_LOGIN", "User logged in successfully")
+            with st.form("login_form"):
+                st.text_input("Username", value="john.smith@auditflow.io")
+                st.text_input("Password", type="password", value="password123")
+                if st.form_submit_button("Sign In", type="primary", use_container_width=True):
+                    with st.spinner("Verifying Credentials..."):
+                        time.sleep(0.5)
+                        st.session_state.auth_stage = "mfa"
+                        st.rerun()
+            
+            if st.button("Forgot Password?", type="tertiary"):
+                st.session_state.auth_stage = "forgot_password"
+                st.rerun()
+
+        # 2. MFA SCREEN
+        elif st.session_state.auth_stage == "mfa":
+            st.markdown("## 🔐 MFA Challenge")
+            st.warning("Enter the code sent to +1 (555) ***-0199")
+            
+            with st.form("mfa_form"):
+                code = st.text_input("Authentication Code", placeholder="123456")
+                if st.form_submit_button("Verify", type="primary", use_container_width=True):
+                    with st.spinner("Verifying Token..."):
+                        time.sleep(1)
+                        st.session_state.auth_stage = "authenticated"
+                        log_action("System", "USER_LOGIN", "MFA Verified Successfully")
+                        st.rerun()
+            
+            if st.button("← Back to Login"):
+                st.session_state.auth_stage = "login"
+                st.rerun()
+
+        # 3. FORGOT PASSWORD
+        elif st.session_state.auth_stage == "forgot_password":
+            st.markdown("## 🔑 Password Reset")
+            st.write("Enter your email to receive a secure reset link.")
+            email = st.text_input("Email Address")
+            if st.button("Send Reset Link", type="primary", use_container_width=True):
+                if email:
+                    st.success(f"Reset link sent to {email}!")
+                    time.sleep(2)
+                    st.session_state.auth_stage = "login"
                     st.rerun()
+            
+            if st.button("← Back"):
+                st.session_state.auth_stage = "login"
+                st.rerun()
+
     st.stop() 
 
 # --- MAIN APP START ---
@@ -211,8 +239,8 @@ with st.sidebar:
     st.caption("Enterprise Compliance")
     st.markdown("---")
     
-    # NAVIGATION
-    page = st.radio("Navigation", [
+    # POP-OUT MENU (Selectbox)
+    page = st.selectbox("Navigation", [
         "Executive Dashboard", 
         "Auto-Fill (Beta)", 
         "Answer Bank", 
@@ -221,7 +249,7 @@ with st.sidebar:
         "Questionnaire Agent", 
         "Knowledge Base", 
         "Settings"
-    ], index=0)
+    ])
     
     st.markdown("---")
     api_key = os.getenv("OPENAI_API_KEY")
@@ -316,7 +344,7 @@ elif page == "Auto-Fill (Beta)":
                     log_action("User", "AUTO_FILL", f"Processed {len(df)} questions from {uploaded_file.name}")
         except Exception as e: st.error(f"Error reading file: {e}")
 
-# --- PAGE 3: ANSWER BANK (NEW!) ---
+# --- PAGE 3: ANSWER BANK ---
 elif page == "Answer Bank":
     show_header("Answer Bank")
     st.info("Verified 'Golden Record' answers. The AI checks here first before searching documents.")
@@ -330,7 +358,6 @@ elif page == "Answer Bank":
         if st.button("➕ Add New", use_container_width=True):
             st.session_state.adding_new = True
 
-    # Display Bank
     if bank:
         df_bank = pd.DataFrame(bank)
         if search_term:
@@ -350,7 +377,6 @@ elif page == "Answer Bank":
     else:
         st.info("Answer Bank is empty. Verify AI responses to add them here.")
 
-    # Add New Manual Entry
     if st.session_state.get("adding_new", False):
         st.divider()
         with st.form("new_entry"):
@@ -363,18 +389,16 @@ elif page == "Answer Bank":
                 st.session_state.adding_new = False
                 st.rerun()
 
-# --- PAGE 4: GAP ANALYSIS (NEW!) ---
+# --- PAGE 4: GAP ANALYSIS ---
 elif page == "Gap Analysis":
     show_header("Strategic Gap Analysis")
-    st.markdown("Scan your knowledge base against common compliance frameworks to identify missing policies.")
+    st.markdown("Scan your knowledge base against common compliance frameworks.")
     
     framework = st.selectbox("Select Framework", ["SOC 2 Type II", "ISO 27001:2022", "NIST 800-53"])
     
     if st.button("🔍 Run Gap Analysis", type="primary"):
         with st.spinner(f"Scanning documents against {framework} controls..."):
-            time.sleep(2) # Simulation
-            
-            # Mock Results based on "Real" logic
+            time.sleep(2)
             col1, col2, col3 = st.columns(3)
             with col1: st.metric("Controls Covered", "85%", "+5% vs Last Scan")
             with col2: st.metric("Missing Policies", "3", "Critical")
@@ -382,7 +406,6 @@ elif page == "Gap Analysis":
             
             st.divider()
             st.subheader("⚠️ Missing or Weak Controls")
-            
             issues = [
                 {"Control": "CC-6.1", "Area": "Vulnerability Management", "Status": "Missing", "Suggestion": "Upload a 'Vulnerability Scanning Policy'"},
                 {"Control": "CC-8.1", "Area": "Change Management", "Status": "Partial", "Suggestion": "Current 'DevOps Guide' lacks rollback procedures."},
@@ -425,6 +448,14 @@ elif page == "My Projects":
 # --- PAGE 6: AI AGENT ---
 elif page == "Questionnaire Agent":
     show_header("Vendor Response Agent")
+    
+    with st.expander("ℹ️ How to use this Agent"):
+        st.markdown("""
+        1. **Ask a question:** Type naturally (e.g., "Do we encrypt data at rest?").
+        2. **Review Evidence:** The AI cites the specific document name. Click "Verified Source" to see details.
+        3. **Save to Answer Bank:** If the answer is perfect, add it to the "Answer Bank" so the AI remembers it for next time.
+        """)
+
     if len(st.session_state.messages) > 0:
         col_export, _ = st.columns([1, 5])
         with col_export:
@@ -452,7 +483,6 @@ elif page == "Questionnaire Agent":
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Verified Source"): 
                                 st.markdown(evidence)
-                            # Button to Add to Bank
                             if st.button("💾 Verified? Add to Answer Bank"):
                                 save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"])
                                 st.success("Saved to Golden Record!")
@@ -577,5 +607,26 @@ elif page == "Settings":
     with tab4:
         st.markdown("### 🔑 Role Management")
         st.caption("Manage access levels for the organization.")
-        roles_data = {"Role": ["Administrator", "Analyst", "Auditor", "Viewer"], "Write Access": [True, True, False, False], "Delete Access": [True, False, False, False], "AI Access": [True, True, True, False]}
-        st.data_editor(pd.DataFrame(roles_data), num_rows="dynamic", use_container_width=True)
+        
+        # Initialize role data in session state if not present
+        if "role_data" not in st.session_state:
+            st.session_state.role_data = pd.DataFrame({
+                "Role": ["Administrator", "Analyst", "Auditor", "Viewer"],
+                "Write Access": [True, True, False, False],
+                "Delete Access": [True, False, False, False],
+                "AI Access": [True, True, True, False]
+            })
+
+        # Editable Dataframe
+        edited_df = st.data_editor(
+            st.session_state.role_data, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            key="role_editor"
+        )
+        
+        # Explicit Save Button
+        if st.button("💾 Save Permission Changes", type="primary"):
+            st.session_state.role_data = edited_df
+            st.success("Permissions updated successfully!")
+            log_action("Admin", "UPDATE_ROLES", "Modified system role permissions")
