@@ -470,7 +470,9 @@ elif st.session_state.page_selection == "Questionnaire Agent":
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message.get("evidence"): with st.expander("🔍 Source"): st.markdown(message["evidence"])
+            if message.get("evidence"): 
+                with st.expander("🔍 Source"): 
+                    st.markdown(message["evidence"])
 
     if prompt := st.chat_input("Ask a question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -483,7 +485,8 @@ elif st.session_state.page_selection == "Questionnaire Agent":
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
                         if evidence and evidence != "No Source": 
-                            with st.expander("🔍 Source"): st.markdown(evidence)
+                            with st.expander("🔍 Source"): 
+                                st.markdown(evidence)
                             if st.button("💾 Save to Bank"):
                                 save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"], "General", "All")
                                 st.success("Saved!")
