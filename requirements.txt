@@ -15,3 +15,5 @@ tiktoken
 rich
 sentence-transformers
 watchdog
+openpyxl
+pdfplumber
