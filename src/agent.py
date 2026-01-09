@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import argparse
+import chromadb
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -39,8 +40,21 @@ class VendorResponseAgent:
             self.embeddings = OpenAIEmbeddings()
             self.llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0)
 
+        # --- DATABASE CONNECTION FIX ---
         if os.path.exists(DB_DIR):
-            self.vector_db = Chroma(persist_directory=DB_DIR, embedding_function=self.embeddings)
+            try:
+                # FORCE LOCAL CLIENT (Fixes 'tenant' error on Streamlit Cloud)
+                self.client = chromadb.PersistentClient(path=DB_DIR)
+                
+                self.vector_db = Chroma(
+                    client=self.client,
+                    collection_name="vendor_knowledge", # Must match ingest.py
+                    embedding_function=self.embeddings
+                )
+                console.print("[green]✅ Knowledge Base Loaded.[/green]")
+            except Exception as e:
+                console.print(f"[red]❌ Error loading DB: {e}[/red]")
+                self.vector_db = None
         else:
             console.print("[red]❌ DB not found. Run 'python src/ingest.py'[/red]")
             self.vector_db = None
