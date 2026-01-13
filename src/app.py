@@ -337,8 +337,8 @@ elif st.session_state.page_selection == "Auto-Fill (Beta)":
             # Preview Data to pick columns
             data = ws.values
             cols = next(data) # Get headers
-            df_preview = pd.DataFrame(data, columns=cols)
             
+            # Simple column mapping
             st.markdown("#### 2. Map Columns")
             question_col_name = st.selectbox("Column with Questions", cols)
             answer_col_name = st.selectbox("Column for Answers (Target)", cols)
@@ -360,7 +360,6 @@ elif st.session_state.page_selection == "Auto-Fill (Beta)":
                     # Iterate rows starting after header
                     for i, row in enumerate(ws.iter_rows(min_row=2, max_row=total_rows), 2):
                         cell_q = row[q_idx-1] # 0-based index for row tuple
-                        cell_a = row[a_idx-1]
                         
                         question_text = str(cell_q.value) if cell_q.value else ""
                         
@@ -484,6 +483,7 @@ elif st.session_state.page_selection == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
+                        # Corrected Logic Split for Streamlit
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Source"): 
                                 st.markdown(evidence)
