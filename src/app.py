@@ -109,14 +109,16 @@ if "auth_stage" not in st.session_state:
     st.session_state.auth_stage = "login"
 if "page_selection" not in st.session_state:
     st.session_state.page_selection = "Executive Dashboard"
-if "user_profile" not in st.session_state or "first_name" not in st.session_state.user_profile:
+
+# Initialize User Profile with Role
+if "user_profile" not in st.session_state or "role" not in st.session_state.user_profile:
     st.session_state.user_profile = {
         "first_name": "John",
         "last_name": "Smith",
         "email": "john.smith@auditflow.io",
         "phone": "555-0199",
         "title": "Sr. Security Analyst",
-        "role": "Administrator"
+        "role": "Administrator" 
     }
 
 def get_theme_css(mode):
@@ -125,6 +127,19 @@ def get_theme_css(mode):
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     div[data-testid="stPopoverBody"] > div { padding: 10px !important; }
     div[data-testid="stPopoverBody"] hr { margin: 10px 0 !important; }
+    
+    /* Role Badge Styling */
+    .role-badge {
+        display: inline-block;
+        background-color: #E0F2F1;
+        color: #00695C;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 4px;
+        margin-bottom: 8px;
+    }
     """
     
     sidebar_btn_css = """
@@ -170,12 +185,18 @@ def show_header(title):
     with col_profile:
         fname = st.session_state.user_profile.get('first_name', 'U')
         lname = st.session_state.user_profile.get('last_name', 'U')
+        role = st.session_state.user_profile.get('role', 'User')
         initials = f"{fname[0]}{lname[0]}"
         
         with st.popover(f"👤 {initials}", use_container_width=True):
             st.markdown(f"**{fname} {lname}**")
+            # Role Badge
+            st.markdown(f"<span class='role-badge'>{role}</span>", unsafe_allow_html=True)
+            
             st.caption(st.session_state.user_profile.get('title', 'User'))
             st.markdown("---")
+            if st.button("⚙️ Manage Profile", use_container_width=True):
+                navigate_to("Settings")
             if st.button("Log Out", key="logout_top", use_container_width=True):
                 st.session_state.auth_stage = "login"
                 st.rerun()
@@ -483,7 +504,6 @@ elif st.session_state.page_selection == "Questionnaire Agent":
                     if not df.empty:
                         answer, evidence = df.iloc[0]['AI_Response'], df.iloc[0]['Evidence']
                         st.markdown(answer)
-                        # Corrected Logic Split for Streamlit
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Source"): 
                                 st.markdown(evidence)
@@ -545,6 +565,28 @@ elif st.session_state.page_selection == "Settings":
     with tab2:
         if os.path.exists(AUDIT_LOG_FILE): st.dataframe(pd.read_csv(AUDIT_LOG_FILE).sort_values(by="Timestamp", ascending=False), use_container_width=True)
     with tab3:
-        st.text_input("First Name", value=st.session_state.user_profile.get("first_name"))
-        st.text_input("Last Name", value=st.session_state.user_profile.get("last_name"))
-        st.button("Save Profile")
+        st.markdown("### Edit Profile")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_fname = st.text_input("First Name", value=st.session_state.user_profile.get("first_name"))
+            new_lname = st.text_input("Last Name", value=st.session_state.user_profile.get("last_name"))
+            new_email = st.text_input("Email", value=st.session_state.user_profile.get("email"))
+        with c2:
+            new_title = st.text_input("Job Title", value=st.session_state.user_profile.get("title"))
+            new_phone = st.text_input("Phone Number", value=st.session_state.user_profile.get("phone"))
+            # Added Role Selector
+            new_role = st.selectbox("Role Assignment", 
+                                    ["Administrator", "Manager", "Analyst", "Read Only"], 
+                                    index=["Administrator", "Manager", "Analyst", "Read Only"].index(st.session_state.user_profile.get("role", "Administrator")))
+        
+        if st.button("Save Profile"):
+            st.session_state.user_profile.update({
+                "first_name": new_fname, 
+                "last_name": new_lname, 
+                "email": new_email, 
+                "title": new_title, 
+                "phone": new_phone,
+                "role": new_role
+            })
+            st.success("Profile Updated!")
+            st.rerun()
