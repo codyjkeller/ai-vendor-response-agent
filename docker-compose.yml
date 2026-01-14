@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  auditflow-app:
+    build: .
+    container_name: auditflow_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data  # Persist the 'data' folder
+      - ./chroma_db:/app/chroma_db # Persist the Vector DB
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: always
