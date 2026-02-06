@@ -10,6 +10,11 @@ from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from sqlalchemy.orm import Session
+from fuzzywuzzy import fuzz  
+
+# Import Database logic
+from database import SessionLocal, AnswerBank
 
 # Setup
 load_dotenv()
@@ -40,7 +45,7 @@ class VendorResponseAgent:
             self.embeddings = OpenAIEmbeddings()
             self.llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0)
 
-        # --- DATABASE CONNECTION FIX ---
+        # --- DATABASE CONNECTION ---
         if os.path.exists(DB_DIR):
             try:
                 # FORCE LOCAL CLIENT (Fixes 'tenant' error on Streamlit Cloud)
@@ -59,15 +64,36 @@ class VendorResponseAgent:
             console.print("[red]❌ DB not found. Run 'python src/ingest.py'[/red]")
             self.vector_db = None
 
+    def check_answer_bank(self, question, threshold=85):
+        """Checks the SQL Master Bank for a similar existing answer."""
+        db: Session = SessionLocal()
+        try:
+            # Get all verified answers
+            known_entries = db.query(AnswerBank).all()
+            best_match = None
+            highest_score = 0
+
+            for entry in known_entries:
+                # Fuzzy match score (0-100)
+                score = fuzz.ratio(question.lower(), entry.question.lower())
+                if score > highest_score:
+                    highest_score = score
+                    best_match = entry
+
+            if highest_score >= threshold:
+                return best_match.answer, f"Answer Bank Match ({highest_score}%)"
+            
+            return None, None
+        finally:
+            db.close()
+
     def generate_responses(self, questions):
-        """Generates AI responses (if key exists) or Search results (if no key)."""
-        if not self.vector_db: return None
-        
+        """Generates responses using Bank -> AI -> Search fallback strategy."""
         results = []
         
         # Setup Retrieval Chain (if LLM exists)
         qa_chain = None
-        if self.llm:
+        if self.llm and self.vector_db:
             qa_prompt = PromptTemplate(template=PROMPT_TEMPLATE, input_variables=["context", "question"])
             qa_chain = RetrievalQA.from_chain_type(
                 llm=self.llm,
@@ -77,32 +103,55 @@ class VendorResponseAgent:
                 chain_type_kwargs={"prompt": qa_prompt}
             )
 
+        # Use Rich Progress bar for CLI (Streamlit ignores this mostly)
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
             task = progress.add_task(f"[cyan]Processing {len(questions)} items...", total=len(questions))
             
             for q in questions:
                 try:
-                    if self.llm:
-                        # Full AI Mode
+                    # STEP 1: Check Master Bank (Secure Cache)
+                    bank_ans, bank_source = self.check_answer_bank(q)
+                    
+                    if bank_ans:
+                        # Found in Bank -> Use it immediately
+                        results.append({
+                            "Question": q, 
+                            "AI_Response": bank_ans, 
+                            "Status": "✅ Verified (Bank)", 
+                            "Evidence": bank_source
+                        })
+                        progress.advance(task)
+                        continue
+
+                    # STEP 2: Use AI (RAG)
+                    if qa_chain:
                         response = qa_chain.invoke({"query": q})
                         answer = response['result']
                         docs = response['source_documents']
-                        status = "⚠️ Review" if "Review Required" in answer else "✅ Auto-Filled"
-                    else:
-                        # Search Only Mode
+                        
+                        status = "⚠️ Review" if "Review Required" in answer else "🤖 AI Generated"
+                        evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs])
+                        
+                        results.append({
+                            "Question": q,
+                            "AI_Response": answer,
+                            "Status": status,
+                            "Evidence": evidence
+                        })
+                    
+                    # STEP 3: Fallback (Search Only / No LLM)
+                    elif self.vector_db:
                         docs = self.vector_db.similarity_search(q, k=3)
-                        answer = "API Key Required for AI Answer. See Evidence."
-                        status = "🔍 Search Result"
+                        evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs])
+                        results.append({
+                            "Question": q, 
+                            "AI_Response": "API Key Required for Answer", 
+                            "Status": "🔍 Search Result", 
+                            "Evidence": evidence
+                        })
+                    else:
+                        results.append({"Question": q, "AI_Response": "No Knowledge Base", "Status": "❌ Failed"})
 
-                    # Evidence Logic
-                    evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs]) if docs else "No Source"
-
-                    results.append({
-                        "Question": q,
-                        "AI_Response": answer,
-                        "Status": status,
-                        "Evidence": evidence
-                    })
                 except Exception as e:
                     results.append({"Question": q, "AI_Response": f"Error: {e}", "Status": "❌ Failed"})
                 
@@ -124,8 +173,9 @@ if __name__ == "__main__":
             q = input("\nQuestion: ")
             if q.lower() in ["exit", "quit"]: break
             df = agent.generate_responses([q])
-            console.print(f"\n[bold]Answer:[/bold] {df.iloc[0]['AI_Response']}")
-            console.print(f"[dim]Evidence: {df.iloc[0]['Evidence']}[/dim]")
+            row = df.iloc[0]
+            console.print(f"\n[bold]Answer:[/bold] {row['AI_Response']}")
+            console.print(f"[dim]Status: {row['Status']} | Evidence: {row['Evidence']}[/dim]")
     
     elif args.file:
         if os.path.exists(args.file):
