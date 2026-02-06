@@ -1,6 +1,7 @@
 import os
-import streamlit as st
 import pdfplumber
+import docx2txt
+import pandas as pd
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
@@ -10,7 +11,7 @@ DATA_DIR = "data"
 DB_DIR = "chroma_db"
 
 def load_documents():
-    """Loads PDFs with layout preservation and page tracking."""
+    """Loads PDFs, Word Docs, and Excel files as knowledge."""
     documents = []
     
     if not os.path.exists(DATA_DIR):
@@ -22,6 +23,7 @@ def load_documents():
     for filename in os.listdir(DATA_DIR):
         file_path = os.path.join(DATA_DIR, filename)
         
+        # 1. PDF Handling
         if filename.endswith(".pdf"):
             try:
                 print(f"   - Processing PDF: {filename}")
@@ -29,38 +31,51 @@ def load_documents():
                     for i, page in enumerate(pdf.pages):
                         text = page.extract_text()
                         if text:
-                            # Enterprise Tweak: Clean up header/footer noise roughly
-                            lines = text.split('\n')
-                            # Simple heuristic: remove lines that are likely just page numbers
-                            clean_lines = [line for line in lines if len(line.strip()) > 3]
-                            clean_text = "\n".join(clean_lines)
-                            
-                            # Add metadata for accurate citations
+                            # Heuristic: Remove page numbers/footers < 10 chars
+                            clean_text = "\n".join([line for line in text.split('\n') if len(line) > 10])
                             documents.append(Document(
                                 page_content=clean_text,
-                                metadata={
-                                    "source": filename, 
-                                    "page": i + 1,
-                                    "type": "policy"
-                                }
+                                metadata={"source": filename, "page": i + 1, "type": "pdf"}
                             ))
             except Exception as e:
-                print(f"❌ Error reading {filename}: {e}")
-                
-        elif filename.endswith(".txt"):
+                print(f"❌ PDF Error {filename}: {e}")
+
+        # 2. Word Doc Handling (NEW)
+        elif filename.endswith(".docx"):
             try:
-                with open(file_path, "r") as f:
+                print(f"   - Processing Word Doc: {filename}")
+                text = docx2txt.process(file_path)
+                if text:
                     documents.append(Document(
-                        page_content=f.read(),
-                        metadata={"source": filename, "page": 1, "type": "notes"}
+                        page_content=text,
+                        metadata={"source": filename, "page": 1, "type": "docx"}
                     ))
             except Exception as e:
-                print(f"❌ Error reading text file {filename}: {e}")
+                print(f"❌ Docx Error {filename}: {e}")
+
+        # 3. Excel/CSV Handling (Previous Questionnaires) (NEW)
+        elif filename.endswith(".xlsx") or filename.endswith(".csv"):
+            try:
+                print(f"   - Processing Spreadsheet: {filename}")
+                if filename.endswith(".xlsx"):
+                    df = pd.read_excel(file_path)
+                else:
+                    df = pd.read_csv(file_path)
+                
+                # Convert rows to text blobs for searching
+                # Assumes columns like 'Question' and 'Answer' exist, or just concatenates all text
+                text_blob = df.to_string(index=False)
+                documents.append(Document(
+                    page_content=text_blob,
+                    metadata={"source": filename, "page": 1, "type": "spreadsheet"}
+                ))
+            except Exception as e:
+                print(f"❌ Excel Error {filename}: {e}")
 
     return documents
 
 def create_vector_db():
-    """Rebuilds the vector database with smart chunking."""
+    """Rebuilds the vector database."""
     if os.path.exists(DB_DIR):
         import shutil
         shutil.rmtree(DB_DIR)
@@ -70,20 +85,21 @@ def create_vector_db():
         print("⚠️ No documents found to index.")
         return
 
-    # Slower but more accurate splitter for policies
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
-        separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
+        separators=["\n\n", "\n", ".", "!", "?", " "]
     )
     
     chunks = text_splitter.split_documents(raw_docs)
     
-    # Create DB
     print(f"🧠 Embedding {len(chunks)} knowledge chunks...")
     Chroma.from_documents(
         documents=chunks,
         embedding=OpenAIEmbeddings(),
         persist_directory=DB_DIR
     )
-    print(f"✅ Knowledge Base Ready!")
+    print(f"✅ Knowledge Base Rebuilt!")
+
+if __name__ == "__main__":
+    create_vector_db()
