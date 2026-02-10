@@ -1,4 +1,4 @@
-# 🤖 AI Vendor Response Agent
+# AI Vendor Response Agent
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![LangChain](https://img.shields.io/badge/LangChain-Enabled-orange)
@@ -8,19 +8,19 @@
 
 This tool ingests your company's "Source of Truth" security artifacts and uses a local Vector Database to autonomously answer incoming security questionnaires.
 
-### ⚡ Hybrid AI Engine
+### Hybrid AI Engine
 * **Free / Local Mode:** If no API key is provided, the agent runs **100% offline** using local HuggingFace embeddings (CPU) to search and retrieve relevant evidence.
 * **Enterprise Mode:** If an OpenAI API key is detected, it automatically upgrades to **GPT-4** to generate full, context-aware answers with confidence scoring.
 
-## ✨ Key Features
+## Key Features
 
-* **🔄 Omni-Channel Ingestion:** Automatically ingests and indexes **PDFs**, **Excel** (previous questionnaires), **Word Docs**, and **Website URLs**.
-* **📄 Audit-Ready Citations:** Every answer includes a reference to the specific source document and page number used to generate the response.
-* **🚀 Bulk CSV Processing:** Capable of ingesting a CSV with hundreds of questions and generating a filled response file in minutes.
-* **⚠️ Confidence Flagging:** Automatically flags low-confidence answers or missing data as "Review Required" so you don't accidentally mislead an assessor.
-* **🔒 Local Vector Store:** Uses `ChromaDB` locally—your sensitive embeddings are not stored in a third-party cloud vector provider.
+* **Omni-Channel Ingestion:** Automatically ingests and indexes **PDFs**, **Excel** (previous questionnaires), **Word Docs**, and **Website URLs**.
+* **Audit-Ready Citations:** Every answer includes a reference to the specific source document and page number used to generate the response.
+* **Bulk CSV Processing:** Capable of ingesting a CSV with hundreds of questions and generating a filled response file in minutes.
+* **Confidence Flagging:** Automatically flags low-confidence answers or missing data as "Review Required" so you don't accidentally mislead an assessor.
+* **Local Vector Store:** Uses `ChromaDB` locally—your sensitive embeddings are not stored in a third-party cloud vector provider.
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 graph LR
@@ -32,7 +32,7 @@ graph LR
     F --> G[Export to CSV]
 ```
 
-## 🚀 Usage
+## Usage
 
 ### 1. Setup
 
@@ -84,21 +84,21 @@ Chat with your security policies in the terminal.
 python src/agent.py --interactive
 ```
 
-## 📂 Output Format
+## Output Format
 
 The tool generates a file named `completed_responses.csv` containing:
 
 | Question | AI Response | Status | Evidence |
 | :--- | :--- | :--- | :--- |
-| **Do you use MFA?** | Yes, we enforce MFA for all employees via Okta. | ✅ Auto-Filled | Access_Policy.pdf (Pg. 4) |
-| **Do you have ISO 27001?** | I could not find mention of ISO 27001 in the provided documents. | ⚠️ Review | No Source Found |
+| **Do you use MFA?** | Yes, we enforce MFA for all employees via Okta. | Auto-Filled | Access_Policy.pdf (Pg. 4) |
+| **Do you have ISO 27001?** | I could not find mention of ISO 27001 in the provided documents. | Review | No Source Found |
 
-## 🛡️ Data Privacy Note
+## Data Privacy Note
 
 Do not commit the `data/` folder, `.env` file, or `chroma_db/` directory to GitHub. A `.gitignore` is included to prevent this.
 
 *While the Vector DB is local, if using the OpenAI mode, text chunks are sent to OpenAI for generation. Ensure this aligns with your company's AI usage policy.*
 
-## 📜 License
+## License
 
 MIT
