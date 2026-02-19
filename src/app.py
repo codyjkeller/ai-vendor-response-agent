@@ -289,7 +289,7 @@ elif st.session_state.page_selection == "Auto-Fill (Beta)":
                         log_action("User", "AUTO_FILL", f"Processed {up_file.name}")
         except Exception as e: st.error(f"Error: {e}")
 
-# --- PAGE 3: ANSWER BANK ---
+# --- PAGE 3: ANSWER Bank ---
 elif st.session_state.page_selection == "Answer Bank":
     show_header("Answer Bank")
     c1, c2 = st.columns([4,1])
@@ -407,8 +407,9 @@ elif st.session_state.page_selection == "Questionnaire Agent":
                         if evidence and evidence != "No Source": 
                             with st.expander("🔍 Source"): st.markdown(evidence)
                             if st.button("💾 Save to Bank"):
-                                save_to_answer_bank(prompt, answer, st.session_state.user_profile["last_name"], "General", "All")
-                                st.success("Saved!")
+                                # FIXED: Updated function name to match the DB helper
+                                db_save_answer(prompt, answer, st.session_state.user_profile["last_name"], "General", "All")
+                                st.success("Saved to Answer Bank!")
                         st.session_state.messages.append({"role": "assistant", "content": answer, "evidence": evidence})
                         log_action("User", "QUERY_AI", prompt[:50] + "...")
                     else: st.error("No response.")
