@@ -84,6 +84,14 @@ Chat with your security policies in the terminal.
 python src/agent.py --interactive
 ```
 
+**Option C: Web GUI (AuditFlow Enterprise)**
+Launch the full interactive Streamlit dashboard. This includes an Executive Dashboard, Answer Bank database, Knowledge Base uploader, and an interactive AI chat interface.
+
+```bash
+streamlit run src/app.py
+```
+*Note: The default login is `john.smith@auditflow.io` with password `123`.*
+
 ## Output Format
 
 The tool generates a file named `completed_responses.csv` containing:
