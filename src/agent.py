@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import argparse
 import chromadb
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
@@ -11,7 +10,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from sqlalchemy.orm import Session
-from fuzzywuzzy import fuzz  
+from thefuzz import fuzz
 
 # Import Database logic
 from database import SessionLocal, AnswerBank
@@ -21,8 +20,10 @@ load_dotenv()
 console = Console()
 
 DB_DIR = "./chroma_db"
-API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = os.getenv("LLM_MODEL", "gpt-4")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "").lower()  # "openai", "anthropic", or "" (auto-detect)
+LLM_MODEL = os.getenv("LLM_MODEL")  # Optional override
 
 PROMPT_TEMPLATE = """
 You are a Security Compliance Officer. Answer the questionnaire based STRICTLY on the context.
@@ -34,16 +35,54 @@ Question: {question}
 Answer:
 """
 
+def resolve_provider():
+    """Determines which LLM provider to use based on env config."""
+    # Explicit override
+    if LLM_PROVIDER == "anthropic" and ANTHROPIC_KEY:
+        return "anthropic"
+    if LLM_PROVIDER == "openai" and OPENAI_KEY:
+        return "openai"
+    
+    # Auto-detect: prefer whichever key is set (Anthropic first if both)
+    if ANTHROPIC_KEY:
+        return "anthropic"
+    if OPENAI_KEY:
+        return "openai"
+    
+    return "local"
+
+def get_llm(provider):
+    """Returns the LLM instance for the detected provider."""
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        model = LLM_MODEL or "claude-sonnet-4-20250514"
+        console.print(f"[bold green]✅ Anthropic API Key found. Using {model}.[/bold green]")
+        return ChatAnthropic(model=model, temperature=0, anthropic_api_key=ANTHROPIC_KEY)
+    
+    elif provider == "openai":
+        from langchain_openai import ChatOpenAI
+        model = LLM_MODEL or "gpt-4"
+        console.print(f"[bold green]✅ OpenAI API Key found. Using {model}.[/bold green]")
+        return ChatOpenAI(model_name=model, temperature=0, openai_api_key=OPENAI_KEY)
+    
+    else:
+        console.print("[bold yellow]⚠️  No API Key found. Running in SEARCH-ONLY mode.[/bold yellow]")
+        return None
+
+def get_embeddings(provider):
+    """Returns embeddings — uses OpenAI if available, otherwise HuggingFace."""
+    if provider == "openai" or (provider == "anthropic" and OPENAI_KEY):
+        # Anthropic doesn't have its own embeddings, so use OpenAI if available
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(openai_api_key=OPENAI_KEY)
+    else:
+        return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
 class VendorResponseAgent:
     def __init__(self):
-        if not API_KEY:
-            console.print("[bold yellow]⚠️  No API Key found. Running in SEARCH-ONLY mode.[/bold yellow]")
-            self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-            self.llm = None
-        else:
-            console.print(f"[bold green]✅ API Key found. Using {MODEL_NAME}.[/bold green]")
-            self.embeddings = OpenAIEmbeddings()
-            self.llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0)
+        self.provider = resolve_provider()
+        self.llm = get_llm(self.provider)
+        self.embeddings = get_embeddings(self.provider)
 
         # --- DATABASE CONNECTION ---
         if os.path.exists(DB_DIR):
