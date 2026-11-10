@@ -1,0 +1,29 @@
+# Dependency set used by CI and local test runs.
+#
+# This repeats the runtime dependencies instead of including requirements.txt
+# because requirements.txt currently cannot be resolved by pip
+# (langchain-core==0.1.52 conflicts with langchain-anthropic==0.1.15, which
+# needs langchain-core>=0.2.2). Once requirements.txt installs cleanly, replace
+# the block below with "-r requirements.txt".
+#
+# streamlit and sentence-transformers are omitted: the tests do not import
+# src/app.py and replace the HuggingFace embedding model with a fake.
+langchain>=0.3,<0.4
+langchain-community>=0.3,<0.4
+langchain-core>=0.3,<0.4
+langchain-openai>=0.3,<0.4
+langchain-anthropic>=0.3,<0.4
+langchain-chroma>=0.2,<0.3
+chromadb
+pandas
+openpyxl
+python-dotenv
+rich
+sqlalchemy
+thefuzz
+pdfplumber
+docx2txt
+
+pytest
+ruff
+bandit

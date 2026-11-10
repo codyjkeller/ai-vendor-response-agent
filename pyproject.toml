@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Baseline: syntax errors and undefined names only. The existing source has
+# unused imports and one-line statements that would fail a wider rule set;
+# widen this list after those are cleaned up.
+select = ["E9", "F63", "F7", "F82"]
