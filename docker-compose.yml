@@ -9,7 +9,11 @@ services:
     volumes:
       - ./data:/app/data  # Persist the 'data' folder
       - ./chroma_db:/app/chroma_db # Persist the Vector DB
+      # OIDC sign-in settings (required unless AUDITFLOW_DEMO_MODE=true). Create the file first.
+      # - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AUDITFLOW_DEMO_MODE=${AUDITFLOW_DEMO_MODE:-false}
+      - AUDITFLOW_ADMIN_EMAILS=${AUDITFLOW_ADMIN_EMAILS:-}
     restart: always

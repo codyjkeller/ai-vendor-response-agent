@@ -28,3 +28,6 @@ audit_log.csv
 # Real security artifacts stay out of git. Samples live in sample_data/.
 data/*
 !data/.gitkeep
+
+# Identity provider client secret
+.streamlit/secrets.toml

@@ -22,6 +22,13 @@ RUN pip3 install -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
+# Run as an unprivileged user. uid 1000 matches the first user on most Linux
+# hosts, so the ./data and ./chroma_db bind mounts stay writable.
+RUN useradd --create-home --uid 1000 appuser \
+    && mkdir -p /app/data /app/chroma_db \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Expose the port Streamlit runs on
 EXPOSE 8501
 
