@@ -15,3 +15,12 @@ completed_responses.csv
 
 # Logs
 *.log
+
+# Local state and tooling
+auditflow.db
+audit_log.csv
+.venv/
+.env.*
+!.env.example
+.pytest_cache/
+.ruff_cache/
