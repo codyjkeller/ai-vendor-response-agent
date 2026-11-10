@@ -2,15 +2,21 @@ import os
 import pdfplumber
 import docx2txt
 import pandas as pd
+import chromadb
+from datetime import date
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.docstore.document import Document
 from dotenv import load_dotenv
 
 load_dotenv()
 
+from config import DEMO_MODE, SAMPLE_DATA_DIR  # noqa: E402
+
 DATA_DIR = "data"
 DB_DIR = "chroma_db"
+COLLECTION_NAME = "vendor_knowledge"  # Must match agent.py
+SAMPLE_LABEL = "SAMPLE - "
 
 def get_embeddings():
     """Returns the best available embedding model."""
@@ -24,21 +30,60 @@ def get_embeddings():
         print("🆓 No OpenAI key found. Using local HuggingFace embeddings (all-MiniLM-L6-v2).")
         return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
+def get_expired_filenames():
+    """Returns filenames whose review date (set in the Knowledge Base) has passed.
+
+    Files that were never registered through the app have no review date and
+    are always indexed.
+    """
+    expired = set()
+    try:
+        from database import SessionLocal, init_db, Document as DocumentRecord
+        init_db()
+        db = SessionLocal()
+        try:
+            for record in db.query(DocumentRecord).all():
+                try:
+                    if date.fromisoformat(str(record.review_date)) < date.today():
+                        expired.add(record.filename)
+                except ValueError:
+                    continue
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"⚠️ Could not read review dates: {e}")
+    return expired
+
 def load_documents():
     """Loads PDFs, Word Docs, and Excel files as knowledge."""
     documents = []
     
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
-        return []
 
     print(f"📂 Scanning {DATA_DIR}...")
 
-    for filename in os.listdir(DATA_DIR):
-        file_path = os.path.join(DATA_DIR, filename)
+    expired = get_expired_filenames()
+    entries = []
+    for name in sorted(os.listdir(DATA_DIR)):
+        if name in expired:
+            print(f"   - Skipping (review date passed): {name}")
+            continue
+        entries.append((name, os.path.join(DATA_DIR, name)))
+
+    # Sample documents are indexed in demo mode only, and are labelled so they
+    # cannot be mistaken for real evidence.
+    if DEMO_MODE and os.path.isdir(SAMPLE_DATA_DIR):
+        print(f"📂 Demo mode: also scanning {SAMPLE_DATA_DIR}...")
+        for name in sorted(os.listdir(SAMPLE_DATA_DIR)):
+            entries.append((SAMPLE_LABEL + name, os.path.join(SAMPLE_DATA_DIR, name)))
+
+    for filename, file_path in entries:
+        # Extension matching is case-insensitive (REPORT.PDF, Policy.TXT).
+        lower_name = filename.lower()
         
         # 1. PDF Handling
-        if filename.endswith(".pdf"):
+        if lower_name.endswith(".pdf"):
             try:
                 print(f"   - Processing PDF: {filename}")
                 with pdfplumber.open(file_path) as pdf:
@@ -55,7 +100,7 @@ def load_documents():
                 print(f"❌ PDF Error {filename}: {e}")
 
         # 2. Word Doc Handling
-        elif filename.endswith(".docx"):
+        elif lower_name.endswith(".docx"):
             try:
                 print(f"   - Processing Word Doc: {filename}")
                 text = docx2txt.process(file_path)
@@ -68,10 +113,10 @@ def load_documents():
                 print(f"❌ Docx Error {filename}: {e}")
 
         # 3. Excel/CSV Handling (Previous Questionnaires)
-        elif filename.endswith(".xlsx") or filename.endswith(".csv"):
+        elif lower_name.endswith(".xlsx") or lower_name.endswith(".csv"):
             try:
                 print(f"   - Processing Spreadsheet: {filename}")
-                if filename.endswith(".xlsx"):
+                if lower_name.endswith(".xlsx"):
                     df = pd.read_excel(file_path)
                 else:
                     df = pd.read_csv(file_path)
@@ -87,7 +132,7 @@ def load_documents():
                 print(f"❌ Excel Error {filename}: {e}")
 
         # 4. Plain Text Handling
-        elif filename.endswith(".txt") and filename != "urls.txt":
+        elif lower_name.endswith(".txt") and os.path.basename(file_path).lower() != "urls.txt":
             try:
                 print(f"   - Processing Text: {filename}")
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -104,11 +149,19 @@ def load_documents():
 
 def create_vector_db():
     """Rebuilds the vector database."""
-    if os.path.exists(DB_DIR):
-        import shutil
-        shutil.rmtree(DB_DIR)
-
     raw_docs = load_documents()
+
+    # Drop the old collection through the client instead of deleting the
+    # directory: removing files under an open chromadb client leaves it
+    # pointing at a read-only database for the rest of the process.
+    client = None
+    if os.path.exists(DB_DIR) or raw_docs:
+        client = chromadb.PersistentClient(path=DB_DIR)
+        try:
+            client.delete_collection(COLLECTION_NAME)
+        except Exception:
+            pass  # Collection did not exist yet
+
     if not raw_docs:
         print("⚠️ No documents found to index.")
         return
@@ -127,8 +180,8 @@ def create_vector_db():
     Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory=DB_DIR,
-        collection_name="vendor_knowledge"
+        client=client,
+        collection_name=COLLECTION_NAME
     )
     print(f"✅ Knowledge Base Rebuilt!")
 

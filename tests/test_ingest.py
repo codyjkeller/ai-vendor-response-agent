@@ -77,9 +77,6 @@ def test_load_documents_survives_corrupt_xlsx(data_dir, capsys):
     assert "Excel Error broken.xlsx" in capsys.readouterr().out
 
 
-# Known defect: extension matching is case-sensitive, so POLICY.TXT / REPORT.PDF
-# are silently skipped. strict=True flags the XPASS once it is fixed.
-@pytest.mark.xfail(strict=True, reason="extension match is case-sensitive")
 def test_load_documents_accepts_uppercase_extension(data_dir):
     (data_dir / "POLICY.TXT").write_text("MFA is enforced.", encoding="utf-8")
     assert "POLICY.TXT" in by_source(ingest.load_documents())
@@ -99,20 +96,64 @@ def test_create_vector_db_builds_index(data_dir, monkeypatch):
     assert os.path.isdir(ingest.DB_DIR)
 
 
-# Known defect: create_vector_db() deletes the index directory with shutil.rmtree
-# while chromadb still holds an open client for that path in the same process.
-# The second rebuild fails with "attempt to write a readonly database". The
-# Streamlit app does exactly this on its second document upload or delete.
-@pytest.mark.xfail(strict=True, reason="rmtree under an open chromadb client; rebuild raises InternalError")
+def search_index(query):
+    import chromadb
+    from langchain_chroma import Chroma
+
+    store = Chroma(
+        client=chromadb.PersistentClient(path=ingest.DB_DIR),
+        collection_name=ingest.COLLECTION_NAME,
+        embedding_function=DeterministicFakeEmbedding(size=16),
+    )
+    return [d.metadata["source"] for d in store.similarity_search(query, k=10)]
+
+
 def test_create_vector_db_can_rebuild_in_same_process(data_dir, monkeypatch):
+    # Regression: the rebuild used to delete the directory under an open
+    # chromadb client and fail with "attempt to write a readonly database".
     monkeypatch.setattr(ingest, "get_embeddings", lambda: DeterministicFakeEmbedding(size=16))
-    (data_dir / "policy.txt").write_text("MFA is enforced for all employees.", encoding="utf-8")
-
+    (data_dir / "old.txt").write_text("Old policy text.", encoding="utf-8")
     ingest.create_vector_db()
-    marker = os.path.join(ingest.DB_DIR, "stale.marker")
-    with open(marker, "w") as handle:
-        handle.write("x")
+    assert search_index("policy") == ["old.txt"]
 
+    (data_dir / "old.txt").unlink()
+    (data_dir / "new.txt").write_text("New policy text.", encoding="utf-8")
     ingest.create_vector_db()
-    assert os.path.isdir(ingest.DB_DIR)
-    assert not os.path.exists(marker)
+    assert search_index("policy") == ["new.txt"]
+
+    # Removing the last document empties the index instead of leaving stale chunks.
+    (data_dir / "new.txt").unlink()
+    ingest.create_vector_db()
+    assert search_index("policy") == []
+
+
+def test_sample_data_is_not_indexed_outside_demo_mode(data_dir, tmp_path, monkeypatch):
+    samples = tmp_path / "sample_data"
+    samples.mkdir()
+    (samples / "sample_policy.txt").write_text("Sample.", encoding="utf-8")
+    monkeypatch.setattr(ingest, "SAMPLE_DATA_DIR", str(samples))
+    monkeypatch.setattr(ingest, "DEMO_MODE", False)
+    assert ingest.load_documents() == []
+
+
+def test_sample_data_is_indexed_and_labelled_in_demo_mode(data_dir, tmp_path, monkeypatch):
+    samples = tmp_path / "sample_data"
+    samples.mkdir()
+    (samples / "sample_policy.txt").write_text("Sample.", encoding="utf-8")
+    (samples / "urls.txt").write_text("https://example.com", encoding="utf-8")
+    monkeypatch.setattr(ingest, "SAMPLE_DATA_DIR", str(samples))
+    monkeypatch.setattr(ingest, "DEMO_MODE", True)
+    assert list(by_source(ingest.load_documents())) == ["SAMPLE - sample_policy.txt"]
+
+
+def test_documents_past_review_date_are_not_indexed(data_dir, db_session):
+    from database import Document as DocumentRecord
+
+    (data_dir / "stale.txt").write_text("Stale.", encoding="utf-8")
+    (data_dir / "current.txt").write_text("Current.", encoding="utf-8")
+    (data_dir / "unregistered.txt").write_text("Dropped in by hand.", encoding="utf-8")
+    db_session.add(DocumentRecord(filename="stale.txt", review_date="2020-01-01"))
+    db_session.add(DocumentRecord(filename="current.txt", review_date="2999-01-01"))
+    db_session.commit()
+
+    assert sorted(by_source(ingest.load_documents())) == ["current.txt", "unregistered.txt"]

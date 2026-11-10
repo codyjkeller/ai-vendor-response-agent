@@ -92,27 +92,70 @@ def test_answer_bank_returns_best_of_several(agent_instance, db_session):
     assert answer == "MFA answer."
 
 
-# Known defect, recorded as expected failures. check_answer_bank scores string
-# similarity only, so questions that differ in a meaning-bearing word clear the
-# 85 threshold and return the wrong answer labelled "Verified (Bank)".
-# strict=True: when the matching is fixed these start passing and pytest
-# reports XPASS(strict) as a failure, which is the cue to remove the marker.
-@pytest.mark.xfail(strict=True, reason="at rest vs in transit scores 85, at the threshold")
+# Regression tests: these questions differ from the stored one in a
+# meaning-bearing word and used to return the stored answer as "Verified".
 def test_answer_bank_does_not_conflate_at_rest_and_in_transit(agent_instance, db_session):
     add_bank_entry(db_session, "Do you encrypt data at rest?", "At rest answer.")
     assert agent_instance.check_answer_bank("Do you encrypt data in transit?") == (None, None)
 
 
-@pytest.mark.xfail(strict=True, reason="negated question scores 93")
 def test_answer_bank_does_not_conflate_negation(agent_instance, db_session):
     add_bank_entry(db_session, "Is data encrypted at rest?", "Yes.")
     assert agent_instance.check_answer_bank("Is data not encrypted at rest?") == (None, None)
 
 
-@pytest.mark.xfail(strict=True, reason="Type I vs Type II scores 99")
 def test_answer_bank_does_not_conflate_soc2_types(agent_instance, db_session):
     add_bank_entry(db_session, "Do you have a SOC 2 Type II report?", "Yes.")
     assert agent_instance.check_answer_bank("Do you have a SOC 2 Type I report?") == (None, None)
+
+
+def test_answer_bank_ignores_punctuation_and_spacing(agent_instance, db_session):
+    add_bank_entry(db_session, "Do you use MFA?", "Yes, via Okta.")
+    answer, _ = agent_instance.check_answer_bank("  do you use  MFA ")
+    assert answer == "Yes, via Okta."
+
+
+def add_scoped_entry(db_session, question, answer, product, subsidiary):
+    db_session.add(AnswerBank(question=question, answer=answer, product=product,
+                              subsidiary=subsidiary, verified_by="t", date_added="2026-01-01"))
+    db_session.commit()
+
+
+def test_answer_bank_filters_by_product(agent_instance, db_session):
+    add_scoped_entry(db_session, "Is data encrypted at rest?", "Alpha answer.", "Alpha", "All")
+    assert agent_instance.check_answer_bank("Is data encrypted at rest?", product="Beta") == (None, None)
+    answer, _ = agent_instance.check_answer_bank("Is data encrypted at rest?", product="alpha")
+    assert answer == "Alpha answer."
+
+
+def test_answer_bank_filters_by_subsidiary(agent_instance, db_session):
+    add_scoped_entry(db_session, "Is data encrypted at rest?", "EU answer.", "General", "EU")
+    assert agent_instance.check_answer_bank("Is data encrypted at rest?", subsidiary="US") == (None, None)
+    answer, _ = agent_instance.check_answer_bank("Is data encrypted at rest?", subsidiary="EU")
+    assert answer == "EU answer."
+
+
+def test_answer_bank_general_entries_apply_to_any_scope(agent_instance, db_session):
+    add_scoped_entry(db_session, "Do you use MFA?", "Yes.", "General", "All")
+    answer, _ = agent_instance.check_answer_bank("Do you use MFA?", product="Beta", subsidiary="US")
+    assert answer == "Yes."
+
+
+def test_answer_bank_without_scope_matches_scoped_entries(agent_instance, db_session):
+    add_scoped_entry(db_session, "Do you use MFA?", "Yes.", "Alpha", "EU")
+    answer, _ = agent_instance.check_answer_bank("Do you use MFA?")
+    assert answer == "Yes."
+
+
+# --- format_evidence ---
+
+def test_format_evidence_adds_page_for_pdf_and_deduplicates():
+    docs = [
+        Document(page_content="x", metadata={"source": "a.pdf", "page": 4, "type": "pdf"}),
+        Document(page_content="y", metadata={"source": "a.pdf", "page": 4, "type": "pdf"}),
+        Document(page_content="z", metadata={"source": "notes.txt", "page": 1, "type": "text"}),
+    ]
+    assert agent.format_evidence(docs) == "a.pdf (Pg. 4); notes.txt"
 
 
 # --- generate_responses ---

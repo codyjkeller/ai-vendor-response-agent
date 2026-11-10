@@ -24,3 +24,7 @@ audit_log.csv
 !.env.example
 .pytest_cache/
 .ruff_cache/
+
+# Real security artifacts stay out of git. Samples live in sample_data/.
+data/*
+!data/.gitkeep

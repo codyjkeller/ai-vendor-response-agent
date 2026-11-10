@@ -8,7 +8,8 @@ import tempfile
 _TMP_DIR = tempfile.mkdtemp(prefix="vendor_agent_tests_")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DIR}/test.db"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
-for _key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_PROVIDER", "LLM_MODEL"):
+for _key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_PROVIDER", "LLM_MODEL",
+             "AUDITFLOW_DEMO_MODE", "AUDITFLOW_ADMIN_EMAILS"):
     os.environ.pop(_key, None)
 
 SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
