@@ -1,13 +1,9 @@
 # Dependency set used by CI and local test runs.
 #
 # This repeats the runtime dependencies instead of including requirements.txt
-# because requirements.txt currently cannot be resolved by pip
-# (langchain-core==0.1.52 conflicts with langchain-anthropic==0.1.15, which
-# needs langchain-core>=0.2.2). Once requirements.txt installs cleanly, replace
-# the block below with "-r requirements.txt".
-#
-# streamlit and sentence-transformers are omitted: the tests do not import
-# src/app.py and replace the HuggingFace embedding model with a fake.
+# so that CI does not install sentence-transformers (and with it PyTorch): the
+# tests replace the HuggingFace embedding model with a fake. Keep the version
+# ranges below in step with requirements.txt.
 langchain>=0.3,<0.4
 langchain-community>=0.3,<0.4
 langchain-core>=0.3,<0.4
@@ -23,6 +19,9 @@ sqlalchemy
 thefuzz
 pdfplumber
 docx2txt
+
+streamlit>=1.42
+Authlib>=1.3.2
 
 pytest
 ruff
