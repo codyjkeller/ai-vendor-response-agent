@@ -10,10 +10,19 @@ issue for security problems.
 
 Only the current `main` branch is maintained.
 
-This is a reference implementation, not a hardened product. In particular, the
-sign-in and MFA screens in `src/app.py` are a demonstration flow with fixed
-demo credentials, and the role table in Settings is not enforced. Do not expose
-the Streamlit app to an untrusted network.
+The web app authenticates users through an OpenID Connect identity provider and
+refuses access when none is configured. Roles are enforced in code: Read Only
+users cannot upload documents or add answers, and only Administrators can
+delete documents or change roles. The editable permission table in Settings is
+a reference and is not itself enforced.
+
+Demo mode (`AUDITFLOW_DEMO_MODE=true`) replaces sign-in with a simulated screen
+that checks no credentials. Never enable it with real documents or on a
+reachable network.
+
+Not yet covered: the SQLite database, audit log, and uploaded documents are
+stored unencrypted on local disk, and the audit log is an append-only CSV
+without tamper protection. Run the app behind TLS on a trusted network.
 
 ## Handling of data
 
