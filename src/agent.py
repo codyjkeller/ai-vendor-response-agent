@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 import argparse
 import chromadb
@@ -34,6 +35,31 @@ Question: {question}
 
 Answer:
 """
+
+# Bank entries saved with these values apply to every product / subsidiary.
+BANK_WILDCARDS = {"", "general", "all"}
+
+def normalize_question(text):
+    """Lowercases, strips punctuation, and returns the sorted list of words."""
+    return sorted(re.sub(r"[^a-z0-9]+", " ", str(text).lower()).split())
+
+def bank_scope_matches(entry_value, wanted):
+    """True when a bank entry applies to the requested product or subsidiary."""
+    if not wanted:
+        return True
+    value = (entry_value or "").strip().lower()
+    return value in BANK_WILDCARDS or value == wanted.strip().lower()
+
+def format_evidence(docs):
+    """Builds the citation string: source file, plus page number for PDFs."""
+    citations = []
+    for d in docs:
+        source = d.metadata.get('source', 'Doc')
+        if d.metadata.get('type') == 'pdf' and d.metadata.get('page'):
+            source = f"{source} (Pg. {d.metadata['page']})"
+        if source not in citations:
+            citations.append(source)
+    return "; ".join(citations)
 
 def resolve_provider():
     """Determines which LLM provider to use based on env config."""
@@ -103,8 +129,17 @@ class VendorResponseAgent:
             console.print("[red]❌ DB not found. Run 'python src/ingest.py'[/red]")
             self.vector_db = None
 
-    def check_answer_bank(self, question, threshold=85):
-        """Checks the SQL Master Bank for a similar existing answer."""
+    def check_answer_bank(self, question, threshold=85, product=None, subsidiary=None):
+        """Checks the SQL Master Bank for an existing answer to the same question.
+
+        A bank answer is returned as verified only when the question uses the
+        same words as the stored one (case, punctuation and word order are
+        ignored). Character similarity alone is not enough: "at rest" vs
+        "in transit", "Type I" vs "Type II" and negations all score above the
+        threshold while asking for a different answer. Near matches fall
+        through to retrieval instead.
+        """
+        question_words = normalize_question(question)
         db: Session = SessionLocal()
         try:
             # Get all verified answers
@@ -113,6 +148,12 @@ class VendorResponseAgent:
             highest_score = 0
 
             for entry in known_entries:
+                if not bank_scope_matches(entry.product, product):
+                    continue
+                if not bank_scope_matches(entry.subsidiary, subsidiary):
+                    continue
+                if normalize_question(entry.question) != question_words:
+                    continue
                 # Fuzzy match score (0-100)
                 score = fuzz.ratio(question.lower(), entry.question.lower())
                 if score > highest_score:
@@ -126,7 +167,7 @@ class VendorResponseAgent:
         finally:
             db.close()
 
-    def generate_responses(self, questions):
+    def generate_responses(self, questions, product=None, subsidiary=None):
         """Generates responses using Bank -> AI -> Search fallback strategy."""
         results = []
         
@@ -149,7 +190,7 @@ class VendorResponseAgent:
             for q in questions:
                 try:
                     # STEP 1: Check Master Bank (Secure Cache)
-                    bank_ans, bank_source = self.check_answer_bank(q)
+                    bank_ans, bank_source = self.check_answer_bank(q, product=product, subsidiary=subsidiary)
                     
                     if bank_ans:
                         # Found in Bank -> Use it immediately
@@ -169,7 +210,7 @@ class VendorResponseAgent:
                         docs = response['source_documents']
                         
                         status = "⚠️ Review" if "Review Required" in answer else "🤖 AI Generated"
-                        evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs])
+                        evidence = format_evidence(docs)
                         
                         results.append({
                             "Question": q,
@@ -181,7 +222,7 @@ class VendorResponseAgent:
                     # STEP 3: Fallback (Search Only / No LLM)
                     elif self.vector_db:
                         docs = self.vector_db.similarity_search(q, k=3)
-                        evidence = "; ".join([f"{d.metadata.get('source','Doc')}" for d in docs])
+                        evidence = format_evidence(docs)
                         results.append({
                             "Question": q, 
                             "AI_Response": "API Key Required for Answer", 

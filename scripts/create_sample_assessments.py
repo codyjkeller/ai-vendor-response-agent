@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 
-# Create data directory if not exists
-os.makedirs("data", exist_ok=True)
+# Create sample_data directory if not exists
+os.makedirs("sample_data", exist_ok=True)
 
 data = {
     "Question": [
@@ -19,6 +19,6 @@ data = {
 }
 
 df = pd.DataFrame(data)
-df.to_excel("data/past_assessments.xlsx", index=False)
+df.to_excel("sample_data/past_assessments.xlsx", index=False)
 
-print("✅ Created 'data/past_assessments.xlsx'. The Agent can now read this!")
+print("✅ Created 'sample_data/past_assessments.xlsx'. The Agent can now read this!")
