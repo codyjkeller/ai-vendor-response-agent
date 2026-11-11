@@ -4,7 +4,7 @@
 # so that CI does not install sentence-transformers (and with it PyTorch): the
 # tests replace the HuggingFace embedding model with a fake. Keep the version
 # ranges below in step with requirements.txt.
-langchain>=0.3,<0.4
+langchain>=1.4.9,<1.5
 langchain-community>=0.3,<0.4
 langchain-core>=0.3,<0.4
 langchain-openai>=0.3,<0.4
