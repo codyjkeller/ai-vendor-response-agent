@@ -1,6 +1,6 @@
 # Use an official lightweight Python image.
 # 3.11-slim is small, fast, and secure.
-FROM python:3.11-slim
+FROM python:3.15-slim
 
 # Set the working directory in the container
 WORKDIR /app
