@@ -26,7 +26,7 @@ def get_embeddings():
         print("🔑 Using OpenAI embeddings.")
         return OpenAIEmbeddings()
     else:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
+        from langchain_huggingface import HuggingFaceEmbeddings
         print("🆓 No OpenAI key found. Using local HuggingFace embeddings (all-MiniLM-L6-v2).")
         return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 

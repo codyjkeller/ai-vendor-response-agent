@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 import pytest
-from langchain_community.embeddings import DeterministicFakeEmbedding
+from langchain_core.embeddings import DeterministicFakeEmbedding
 
 import ingest
 
