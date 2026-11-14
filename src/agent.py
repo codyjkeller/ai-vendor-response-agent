@@ -5,8 +5,8 @@ import argparse
 import chromadb
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_classic.chains import RetrievalQA
+from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -81,13 +81,13 @@ def get_llm(provider):
     """Returns the LLM instance for the detected provider."""
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
-        model = LLM_MODEL or "claude-sonnet-4-20250514"
+        model = LLM_MODEL or "claude-sonnet-5-5"
         console.print(f"[bold green]✅ Anthropic API Key found. Using {model}.[/bold green]")
         return ChatAnthropic(model=model, temperature=0, anthropic_api_key=ANTHROPIC_KEY)
     
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
-        model = LLM_MODEL or "gpt-4"
+        model = LLM_MODEL or "gpt-5.5"
         console.print(f"[bold green]✅ OpenAI API Key found. Using {model}.[/bold green]")
         return ChatOpenAI(model_name=model, temperature=0, openai_api_key=OPENAI_KEY)
     

@@ -10,7 +10,7 @@ This tool ingests your company's "Source of Truth" security artifacts and uses a
 
 ### Hybrid AI Engine
 * **Free / Local Mode:** If no API key is provided, the agent runs **100% offline** using local HuggingFace embeddings (CPU) to search and retrieve relevant evidence.
-* **Enterprise Mode:** If an Anthropic or OpenAI API key is detected, it generates full answers from the retrieved evidence (Claude or GPT-4 by default; set `LLM_PROVIDER` and `LLM_MODEL` to choose). Questions the evidence does not answer are returned as "Review Required".
+* **Enterprise Mode:** If an Anthropic or OpenAI API key is detected, it generates full answers from the retrieved evidence (Claude Sonnet 5.5 or GPT-5.5 by default; set `LLM_PROVIDER` and `LLM_MODEL` to choose). Questions the evidence does not answer are returned as "Review Required".
 
 ## Key Features
 
@@ -56,7 +56,7 @@ pip install -r requirements.txt
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 # or
 OPENAI_API_KEY=sk-your-key-here
-LLM_MODEL=gpt-4o  # Optional: overrides the provider default
+LLM_MODEL=gpt-6-sol  # Optional: overrides the provider default
 ```
 
 ### 3. Build the Knowledge Base

@@ -4,9 +4,9 @@ import docx2txt
 import pandas as pd
 import chromadb
 from datetime import date
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from dotenv import load_dotenv
 
 load_dotenv()
