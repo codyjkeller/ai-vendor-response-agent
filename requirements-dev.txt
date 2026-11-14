@@ -4,12 +4,13 @@
 # so that CI does not install sentence-transformers (and with it PyTorch): the
 # tests replace the HuggingFace embedding model with a fake. Keep the version
 # ranges below in step with requirements.txt.
-langchain>=0.3,<0.4
-langchain-community>=0.3,<0.4
-langchain-core>=0.3,<0.4
-langchain-openai>=0.3,<0.4
-langchain-anthropic>=0.3,<0.4
-langchain-chroma>=0.2,<0.3
+langchain-classic>=1.0,<2
+langchain-text-splitters>=1.1,<2
+langchain-community>=0.4,<0.5
+langchain-core>=1.8,<2
+langchain-openai>=1.8,<2
+langchain-anthropic>=1.7.10,<2
+langchain-chroma>=1.1,<2
 chromadb
 pandas
 openpyxl
@@ -20,8 +21,8 @@ thefuzz
 pdfplumber
 docx2txt
 
-streamlit>=1.42
-Authlib>=1.3.2
+streamlit>=1.67.0
+Authlib>=1.9.5
 
 pytest
 ruff
