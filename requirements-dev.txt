@@ -6,7 +6,7 @@
 # ranges below in step with requirements.txt.
 langchain-classic>=1.0,<2
 langchain-text-splitters>=1.1,<2
-langchain-huggingface>=1.2,<2
+langchain-huggingface>=1.2.3,<2
 langchain-core>=1.8,<2
 langchain-openai>=1.8,<2
 langchain-anthropic>=1.7.10,<2
